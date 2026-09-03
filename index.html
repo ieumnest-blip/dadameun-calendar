@@ -861,16 +861,21 @@
   }
   .color-swatches {
     display: flex;
-    gap: 7px;
-    flex-wrap: wrap;
+    gap: 5px;
+    flex: 1;
+    min-width: 0;
   }
   .swatch {
-    width: 22px; height: 22px;
+    width: 22px;
+    aspect-ratio: 1;
     border-radius: 50%;
     border: 2px solid transparent;
     cursor: pointer;
     padding: 0;
     box-sizing: border-box;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 26px;
   }
   .swatch.active {
     border-color: #33505f;
@@ -1441,12 +1446,18 @@
     <span class="color-label">글자색</span>
     <div class="color-swatches" id="colorSwatches">
       <button type="button" class="swatch swatch-default active" data-color="" title="기본"></button>
+      <button type="button" class="swatch" data-color="#ffd23c" style="background:#ffd23c" title="노랑"></button>
       <button type="button" class="swatch" data-color="#f4a83a" style="background:#f4a83a" title="주황"></button>
       <button type="button" class="swatch" data-color="#e06565" style="background:#e06565" title="빨강"></button>
       <button type="button" class="swatch" data-color="#5fbf7a" style="background:#5fbf7a" title="초록"></button>
+      <button type="button" class="swatch" data-color="#4fd1c5" style="background:#4fd1c5" title="민트"></button>
       <button type="button" class="swatch" data-color="#3d8fc0" style="background:#3d8fc0" title="파랑"></button>
+      <button type="button" class="swatch" data-color="#3b5bdb" style="background:#3b5bdb" title="남색"></button>
       <button type="button" class="swatch" data-color="#a880e0" style="background:#a880e0" title="보라"></button>
       <button type="button" class="swatch" data-color="#e07fb8" style="background:#e07fb8" title="분홍"></button>
+      <button type="button" class="swatch" data-color="#a67c52" style="background:#a67c52" title="갈색"></button>
+      <button type="button" class="swatch" data-color="#8a95a0" style="background:#8a95a0" title="회색"></button>
+      <button type="button" class="swatch" data-color="#a8d94f" style="background:#a8d94f" title="라임"></button>
     </div>
   </div>
   <div class="input-row1 color-row">
@@ -1457,9 +1468,14 @@
       <button type="button" class="swatch" data-color="#f4a83a" style="background:#f4a83a" title="주황"></button>
       <button type="button" class="swatch" data-color="#e06565" style="background:#e06565" title="빨강"></button>
       <button type="button" class="swatch" data-color="#5fbf7a" style="background:#5fbf7a" title="초록"></button>
+      <button type="button" class="swatch" data-color="#4fd1c5" style="background:#4fd1c5" title="민트"></button>
       <button type="button" class="swatch" data-color="#3d8fc0" style="background:#3d8fc0" title="파랑"></button>
+      <button type="button" class="swatch" data-color="#3b5bdb" style="background:#3b5bdb" title="남색"></button>
       <button type="button" class="swatch" data-color="#a880e0" style="background:#a880e0" title="보라"></button>
       <button type="button" class="swatch" data-color="#e07fb8" style="background:#e07fb8" title="분홍"></button>
+      <button type="button" class="swatch" data-color="#a67c52" style="background:#a67c52" title="갈색"></button>
+      <button type="button" class="swatch" data-color="#8a95a0" style="background:#8a95a0" title="회색"></button>
+      <button type="button" class="swatch" data-color="#a8d94f" style="background:#a8d94f" title="라임"></button>
     </div>
   </div>
     <button class="add-btn" id="addBtn">등록</button>
@@ -1930,6 +1946,7 @@ function buildMonthBlock(year, month) {
               if (it.isTodo) {
                 const row = document.createElement('div');
                 row.className = 'memo-preview todo-preview';
+                row.dataset.idx = itemIdx;
                 const cb = document.createElement('input');
                 cb.type = 'checkbox';
                 cb.checked = !!it.done;
@@ -1947,6 +1964,7 @@ function buildMonthBlock(year, month) {
               } else {
                 const row = document.createElement('div');
                 row.className = 'memo-preview';
+                row.dataset.idx = itemIdx;
                 row.textContent = (it.alarmTime ? '⏰ ' : '') + (it.isDday && it.ddayTarget ? '[' + computeDdayLabel(it.ddayTarget) + '] ' : '') + firstLine(it.text);
                 if (it.color) row.style.color = it.color;
                 list.appendChild(row);
@@ -1962,6 +1980,7 @@ function buildMonthBlock(year, month) {
             if (it.isTodo) {
               const row = document.createElement('div');
               row.className = 'memo-preview todo-preview';
+              row.dataset.idx = itemIdx;
               const cb = document.createElement('input');
               cb.type = 'checkbox';
               cb.checked = !!it.done;
@@ -1979,6 +1998,7 @@ function buildMonthBlock(year, month) {
             } else {
               const row = document.createElement('div');
               row.className = 'memo-preview';
+              row.dataset.idx = itemIdx;
               row.textContent = (it.alarmTime ? '⏰ ' : '') + (it.isDday && it.ddayTarget ? '[' + computeDdayLabel(it.ddayTarget) + '] ' : '') + firstLine(it.text);
               if (it.color) row.style.color = it.color;
               list.appendChild(row);
@@ -1997,6 +2017,19 @@ function buildMonthBlock(year, month) {
         td.addEventListener('click', (e) => {
           if (dragMoved) { dragMoved = false; return; }
           selectDate(k);
+          if (e.shiftKey) {
+            const previewEl = e.target.closest('.memo-preview');
+            const dayItems = memos[k];
+            if (previewEl && previewEl.dataset.idx !== undefined) {
+              openItemPopup(k, Number(previewEl.dataset.idx), previewEl);
+              return;
+            }
+            if (dayItems && dayItems.length > 0) {
+              openItemPopup(k, 0, e.currentTarget);
+              return;
+            }
+            // 그 날짜에 수정할 내용이 없으면 평소처럼 새 일정 추가로 진행
+          }
           openQuickAdd(k, null, e.currentTarget);
         });
         rowCells[col] = { td, rangeItem };
@@ -3251,6 +3284,21 @@ document.addEventListener('keydown', (e) => {
   ['modalBg', 'manageBg', 'pickerBg', 'imgLightbox', 'searchBg', 'itemBg', 'quickAddBg'].forEach((id) => {
     document.getElementById(id).classList.remove('show');
   });
+});
+
+/* Alt + 방향키로 계정(졸린곰/고민곰) 전환 */
+document.addEventListener('keydown', (e) => {
+  if (!e.altKey) return;
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  const cards = Array.from(document.querySelectorAll('.acc-card'));
+  if (cards.length < 2) return;
+  const curIdx = cards.findIndex((c) => c.dataset.acc === currentAccount);
+  if (curIdx === -1) return;
+  const nextIdx = e.key === 'ArrowRight'
+    ? (curIdx + 1) % cards.length
+    : (curIdx - 1 + cards.length) % cards.length;
+  e.preventDefault();
+  switchAccount(cards[nextIdx].dataset.acc);
 });
 
 /* ===== 계정 전환 ===== */
