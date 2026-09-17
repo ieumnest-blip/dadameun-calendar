@@ -373,13 +373,13 @@
   .cal-nav-btn {
     font-family: inherit;
     position: absolute;
-    top: 46px;
-    width: 40px; height: 40px;
-    border-radius: 50%;
+    top: 40px;
+    width: 46px; height: 40px;
+    border-radius: 0;
     border: none;
-    background: #3d8fc0;
-    color: #fff;
-    font-size: 22px;
+    background: transparent;
+    color: #4a7996;
+    font-size: 20px;
     font-weight: 700;
     line-height: 1;
     display: flex;
@@ -387,24 +387,35 @@
     justify-content: center;
     cursor: pointer;
     z-index: 15;
-    box-shadow: 0 3px 10px rgba(61,143,192,0.4);
+    padding: 0;
+  }
+  .cal-nav-btn svg.nav-cloud {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    filter: drop-shadow(0 2px 4px rgba(140,160,220,0.35));
+  }
+  .cal-nav-btn .nav-arrow {
+    position: relative;
+    z-index: 1;
+    margin-top: 3px;
   }
   .cal-nav-btn:active { transform: scale(0.94); }
   .cal-nav-prev { left: 2px; }
   .cal-nav-next { right: 2px; }
   @media (min-width: 1100px) {
     .cal-nav-btn {
-      top: 8px;
-      width: 32px; height: 32px;
-      font-size: 18px;
+      top: 22px;
+      width: 40px; height: 34px;
+      font-size: 16px;
     }
-    .cal-nav-prev { left: 374px; }
-    .cal-nav-next { right: 344px; }
+    .cal-nav-prev { left: 366px; }
+    .cal-nav-next { right: 336px; }
   }
   #calendarWrap {
     display: flex;
     flex-wrap: nowrap;
-    align-items: flex-start;
+    align-items: flex-end;
     overflow-x: auto;
     overflow-y: hidden;
     scroll-snap-type: x mandatory;
@@ -569,7 +580,7 @@
     font-size: 12.5px;
     font-weight: 700;
     padding: 2px 8px;
-    margin: 4px 6px 0;
+    margin: 3px 6px 0;
     border: 1.5px solid var(--line-color, #3d8fc0);
     border-radius: 6px;
     background: #fff;
@@ -718,7 +729,7 @@
     #calendarWrap {
       display: flex;
       flex-wrap: nowrap;
-      align-items: flex-start;
+      align-items: flex-end;
       overflow-x: auto;
       overflow-y: hidden;
       scroll-snap-type: x mandatory;
@@ -1111,6 +1122,72 @@
     min-width: 16px;
     max-width: 16px;
   }
+  .memo-inline-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 6px;
+    width: 100%;
+  }
+  .memo-inline-editor-field {
+    width: 100%;
+    box-sizing: border-box;
+    font-family: inherit;
+    font-size: 14px;
+    padding: 8px 10px;
+    border: 1px solid #cfe0ea;
+    border-radius: 8px;
+    resize: vertical;
+    color: #2c3e46;
+  }
+  textarea.memo-inline-editor-field {
+    min-height: 70px;
+  }
+  .memo-inline-editor-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
+  }
+  .memo-inline-editor-row .memo-inline-editor-field {
+    width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
+  }
+  .memo-inline-editor-datefield {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .memo-inline-editor-datefield label {
+    font-size: 11px;
+    color: #7fa0b0;
+    font-weight: 600;
+  }
+  .memo-inline-editor-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .memo-inline-editor-actions button {
+    font-family: inherit;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .btn-inline-save {
+    background: #3d8fc0;
+    color: #fff;
+    font-weight: 700;
+  }
+  .btn-inline-cancel {
+    background: #e7eef2;
+    color: #4a5b63;
+  }
   .memo-item button {
     font-family: inherit;
     border: none; background: #dbeef8; color: #2f7bab;
@@ -1258,7 +1335,7 @@
     .memo-panel.right-panel {
       left: auto;
       right: 24px;
-      top: 84px;
+      top: 22px;
       width: 300px;
     }
   }
@@ -1270,38 +1347,57 @@
   }
   .panel-banner {
     position: relative;
-    background: #fff;
-    border: 2px solid #3d8fc0;
-    border-radius: 16px;
-    padding: 12px 18px;
-    margin: 4px 0 26px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #e4f1fc;
+    border: none;
+    border-radius: 14px;
+    padding: 10px 14px;
+    margin: 4px 0 18px;
     width: 100%;
     box-sizing: border-box;
-    box-shadow: 0 4px 10px rgba(61,143,192,0.18);
+  }
+  .banner-cloud {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
   }
   .panel-banner-inner {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 8px;
-    color: #2f6a86;
-    font-size: 16px;
+    gap: 5px;
+  }
+  .banner-title {
+    font-size: 17px;
     font-weight: 800;
-    letter-spacing: 0.3px;
+    color: #3a5068;
+    letter-spacing: -0.3px;
+    flex-shrink: 0;
   }
-  .panel-banner::after {
-    content: '';
-    position: absolute;
-    bottom: -9px;
-    left: 28px;
-    width: 16px; height: 16px;
+  .banner-heart {
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .memo-freebox-wrap {
     background: #fff;
-    border-right: 2px solid #3d8fc0;
-    border-bottom: 2px solid #3d8fc0;
-    transform: rotate(45deg);
+    border: 1px solid #dbe4ea;
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    min-height: 140px;
   }
-  .panel-banner-icon {
-    font-size: 19px;
+  .memo-freebox-title {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #33546b;
+    font-weight: 700;
+    margin-bottom: 6px;
+    flex-shrink: 0;
   }
   .memo-box {
     min-height: 120px;
@@ -1325,7 +1421,23 @@
     display: block;
   }
   @media (min-width: 1100px) {
-    .memo-box { max-height: 200px; }
+    /* 오른쪽 패널(디데이+메모)이 화면 높이에 맞춰 고정되므로,
+       메모 박스는 디데이 목록이 차지하는 만큼을 제외한 나머지 공간을 채움 */
+    .memo-panel.right-panel {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .dday-widget { flex-shrink: 0; }
+    .memo-freebox-wrap {
+      flex: 1 1 auto;
+      min-height: 100px;
+    }
+    .memo-box {
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: none;
+    }
   }
 
   .todo-divider {
@@ -1578,17 +1690,39 @@
 
 <div class="memo-panel right-panel" id="ddayPanel">
   <div class="panel-banner">
+    <svg class="banner-cloud" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M18 10.2h-1.26A8 8 0 1 0 9 20h9a4.9 4.9 0 0 0 0-9.8z" fill="#ffffff" stroke="#8ec6f0" stroke-width="1.3" stroke-linejoin="round"/>
+      <circle cx="10.4" cy="16.1" r="0.7" fill="#5a6b7a"/>
+      <circle cx="14.6" cy="16.1" r="0.7" fill="#5a6b7a"/>
+      <circle cx="9.1" cy="17.5" r="1.05" fill="#ffb3c0"/>
+      <circle cx="15.9" cy="17.5" r="1.05" fill="#ffb3c0"/>
+      <path d="M11.7,17.4 q0.8,0.9 1.6,0" stroke="#5a6b7a" stroke-width="0.55" fill="none" stroke-linecap="round"/>
+    </svg>
     <div class="panel-banner-inner">
-      <span class="panel-banner-icon">🎈</span>
-      <span>일정 확인!</span>
+      <span class="banner-title">일정 확인</span>
+      <span class="banner-heart">💙</span>
     </div>
   </div>
   <div class="dday-widget" id="ddayWidget" style="display:none;"></div>
+  <div class="memo-freebox-wrap">
+    <div class="memo-freebox-title">📝 메모</div>
+    <div class="memo-box" id="freeMemoBox" contenteditable="true" data-placeholder="메모를 입력하세요..."></div>
+  </div>
 </div>
 
 <main>
-  <button type="button" class="cal-nav-btn cal-nav-prev" id="calNavPrev" aria-label="이전 달">‹</button>
-  <button type="button" class="cal-nav-btn cal-nav-next" id="calNavNext" aria-label="다음 달">›</button>
+  <button type="button" class="cal-nav-btn cal-nav-prev" id="calNavPrev" aria-label="이전 달">
+    <svg class="nav-cloud" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M18 10.2h-1.26A8 8 0 1 0 9 20h9a4.9 4.9 0 0 0 0-9.8z" fill="#ffffff" stroke="#8ec6f0" stroke-width="1.3" stroke-linejoin="round"/>
+    </svg>
+    <span class="nav-arrow">‹</span>
+  </button>
+  <button type="button" class="cal-nav-btn cal-nav-next" id="calNavNext" aria-label="다음 달">
+    <svg class="nav-cloud" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M18 10.2h-1.26A8 8 0 1 0 9 20h9a4.9 4.9 0 0 0 0-9.8z" fill="#ffffff" stroke="#8ec6f0" stroke-width="1.3" stroke-linejoin="round"/>
+    </svg>
+    <span class="nav-arrow">›</span>
+  </button>
   <div id="calendarWrap"></div>
   <div id="yearOverview" class="year-overview"></div>
 </main>
@@ -1952,8 +2086,39 @@ try {
 
 const ACTIVE_ACCOUNT_KEY = 'yearlyCalendarActiveAccount';
 function storageKeyFor(acc) { return 'yearlyCalendarMemos_acc' + acc; }
+function freeMemoKeyFor(acc) { return 'yearlyCalendarFreeMemo_acc' + acc; }
 let currentAccount = localStorage.getItem(ACTIVE_ACCOUNT_KEY) || '1';
 let memos = loadMemosFor(currentAccount);
+
+function loadFreeMemo(acc) {
+  const box = document.getElementById('freeMemoBox');
+  if (!box) return;
+  box.innerHTML = localStorage.getItem(freeMemoKeyFor(acc)) || '';
+}
+function saveFreeMemo() {
+  const box = document.getElementById('freeMemoBox');
+  if (!box) return;
+  localStorage.setItem(freeMemoKeyFor(currentAccount), box.innerHTML);
+}
+loadFreeMemo(currentAccount);
+document.getElementById('freeMemoBox')?.addEventListener('input', saveFreeMemo);
+document.getElementById('freeMemoBox')?.addEventListener('paste', (e) => {
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  for (const it of items) {
+    if (it.type.startsWith('image/')) {
+      e.preventDefault();
+      const file = it.getAsFile();
+      const reader = new FileReader();
+      reader.onload = () => {
+        document.execCommand('insertImage', false, reader.result);
+        saveFreeMemo();
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+  }
+});
 
 function migrateMemosObj(obj) {
   Object.keys(obj).forEach((k) => {
@@ -2183,7 +2348,7 @@ function buildMonthBlock(year, month) {
           // 이 칸에도 미리 확보해둬야 막대가 아래쪽(다음 주 행)으로 넘치지 않음.
           // 우선 추정치로 예약해두고, 렌더 후 실제 글자 높이에 맞춰 보정함(adjustRangeLaneHeights).
           td.dataset.maxLane = maxLaneToday;
-          td.style.setProperty('--lane-min', (LANE_TOP0 + (maxLaneToday + 1) * LANE_STEP + 6) + 'px');
+          td.style.setProperty('--lane-min', (LANE_TOP0 + (maxLaneToday + 1) * LANE_STEP + 3) + 'px');
         }
 
         const dNum = document.createElement('span');
@@ -2478,7 +2643,7 @@ function adjustRangeLaneHeights() {
       if (!(lane in laneHeight) || h > laneHeight[lane]) laneHeight[lane] = h;
       if (lane > maxLane) maxLane = lane;
     });
-    const GAP = 4;
+    const GAP = 3;
     const laneTop = [LANE_TOP0];
     for (let i = 0; i <= maxLane; i++) {
       const h = laneHeight[i] !== undefined ? laneHeight[i] : LANE_STEP;
@@ -2490,7 +2655,7 @@ function adjustRangeLaneHeights() {
     });
     tr.querySelectorAll('td[data-max-lane]').forEach((td) => {
       const tdMaxLane = Number(td.dataset.maxLane);
-      const needed = laneTop[Math.min(tdMaxLane + 1, laneTop.length - 1)] + 6;
+      const needed = laneTop[Math.min(tdMaxLane + 1, laneTop.length - 1)] + 3;
       td.style.setProperty('--lane-min', needed + 'px');
       const list = td.querySelector('.memo-list');
       if (list) list.style.marginTop = needed + 'px';
@@ -2540,28 +2705,77 @@ function deleteRangeGroup(groupId) {
   saveMemos();
 }
 
-function editMemoItem(key, idx) {
+function applyMemoContent(key, idx, newText) {
   const item = memos[key][idx];
-  const newText = prompt('내용 수정', item.text);
-  if (newText === null) return;
-  const trimmed = newText.trim();
-  if (!trimmed) { alert('내용을 입력해주세요.'); return; }
+  const trimmedText = newText.trim();
+  if (!trimmedText) { alert('내용을 입력해주세요.'); return; }
 
   if (item.groupId) {
-    const applyAll = confirm('이 기간 전체에 수정 내용을 적용할까요?\n확인: 기간 전체 적용 / 취소: 이 날짜만 적용');
-    if (applyAll) {
-      Object.keys(memos).forEach((k) => {
-        memos[k].forEach((it) => { if (it.groupId === item.groupId) it.text = trimmed; });
-      });
-    } else {
-      item.text = trimmed;
-    }
+    Object.keys(memos).forEach((k) => {
+      memos[k].forEach((it) => { if (it.groupId === item.groupId) it.text = trimmedText; });
+    });
   } else {
-    item.text = trimmed;
+    item.text = trimmedText;
   }
   saveMemos();
   renderCalendar();
   openModal(key);
+}
+
+function applyMemoTitle(key, idx, newTitle) {
+  const item = memos[key][idx];
+  const trimmedTitle = newTitle.trim();
+
+  if (item.groupId) {
+    Object.keys(memos).forEach((k) => {
+      memos[k].forEach((it) => { if (it.groupId === item.groupId) it.title = trimmedTitle || null; });
+    });
+  } else {
+    item.title = trimmedTitle || null;
+  }
+  saveMemos();
+  renderCalendar();
+  openModal(key);
+}
+
+/* 기간(그룹) 하나를 새 시작~종료일로 통째로 옮김 (내용/색상 등은 그대로 유지) */
+function moveRangeGroup(groupId, newStartKey, newEndKey) {
+  let rep = null;
+  Object.keys(memos).forEach((k) => {
+    if (rep) return;
+    const found = memos[k].find((it) => it.groupId === groupId);
+    if (found) rep = { ...found };
+  });
+  if (!rep) return null;
+  deleteRangeGroup(groupId);
+
+  let s = keyToDate(newStartKey), e = keyToDate(newEndKey);
+  if (s > e) { const tmp = s; s = e; e = tmp; }
+  const startK = keyOf(s.getFullYear(), s.getMonth(), s.getDate());
+  const endK = keyOf(e.getFullYear(), e.getMonth(), e.getDate());
+  const cur = new Date(s);
+  let count = 0;
+  while (cur <= e && count < 400) {
+    const k = keyOf(cur.getFullYear(), cur.getMonth(), cur.getDate());
+    if (!memos[k]) memos[k] = [];
+    memos[k].push({ ...rep, start: startK, end: endK, ddayTarget: rep.isDday ? endK : rep.ddayTarget });
+    cur.setDate(cur.getDate() + 1);
+    count++;
+  }
+  saveMemos();
+  return startK;
+}
+
+function applyMemoPeriod(key, idx, newStart, newEnd) {
+  const item = memos[key][idx];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(newStart) || !/^\d{4}-\d{2}-\d{2}$/.test(newEnd)) {
+    alert('날짜 형식이 올바르지 않아요. 예: 2026-09-11');
+    return;
+  }
+  const newStartK = moveRangeGroup(item.groupId, newStart, newEnd);
+  renderCalendar();
+  updateDdayWidget();
+  if (newStartK) openModal(newStartK);
 }
 
 const COLOR_PRESETS = ['', '#ffd23c', '#f4a83a', '#e06565', '#c2255c', '#5fbf7a', '#7a8b3f', '#a8d94f', '#4fd1c5', '#22c1c3', '#6ec3e8', '#3d8fc0', '#3b5bdb', '#5b4fc7', '#a880e0', '#b8a9e3', '#e07fb8', '#ff8c69', '#a67c52', '#8a95a0', '#4a4a4a', '#b5a642'];
@@ -2740,10 +2954,103 @@ function buildMemoItemCard(key, idx, refreshFn) {
   const actions = document.createElement('div');
   actions.className = 'memo-item-actions';
 
-  const editBtn = document.createElement('button');
-  editBtn.textContent = '수정';
-  editBtn.addEventListener('click', () => editMemoItem(key, idx));
-  actions.appendChild(editBtn);
+  function closeInlineExtras() {
+    div.querySelectorAll('.memo-inline-editor, .color-picker-inline').forEach((el) => el.remove());
+  }
+
+  function makeInlineTextEditor(label, currentValue, multiline, onSave) {
+    const btn = document.createElement('button');
+    btn.textContent = label;
+    const editorClass = 'memo-inline-editor-' + label;
+    btn.addEventListener('click', () => {
+      const existing = div.querySelector('.' + editorClass);
+      if (existing) { existing.remove(); return; }
+      closeInlineExtras();
+      const wrap = document.createElement('div');
+      wrap.className = 'memo-inline-editor ' + editorClass;
+      const field = document.createElement(multiline ? 'textarea' : 'input');
+      if (!multiline) field.type = 'text';
+      field.className = 'memo-inline-editor-field';
+      field.value = currentValue || '';
+      wrap.appendChild(field);
+      const actionsRow = document.createElement('div');
+      actionsRow.className = 'memo-inline-editor-actions';
+      const saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.className = 'btn-inline-save';
+      saveBtn.textContent = '저장';
+      saveBtn.addEventListener('click', () => onSave(field.value));
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'btn-inline-cancel';
+      cancelBtn.textContent = '취소';
+      cancelBtn.addEventListener('click', () => wrap.remove());
+      actionsRow.appendChild(saveBtn);
+      actionsRow.appendChild(cancelBtn);
+      wrap.appendChild(actionsRow);
+      div.appendChild(wrap);
+      field.focus();
+      if (!multiline) field.select();
+    });
+    return btn;
+  }
+
+  actions.appendChild(makeInlineTextEditor('내용수정', item.text, true, (val) => applyMemoContent(key, idx, val)));
+  actions.appendChild(makeInlineTextEditor('제목수정', item.title || '', false, (val) => applyMemoTitle(key, idx, val)));
+
+  if (item.groupId) {
+    const editPeriodBtn = document.createElement('button');
+    editPeriodBtn.textContent = '기간수정';
+    editPeriodBtn.addEventListener('click', () => {
+      const existing = div.querySelector('.memo-inline-editor-기간수정');
+      if (existing) { existing.remove(); return; }
+      closeInlineExtras();
+      const wrap = document.createElement('div');
+      wrap.className = 'memo-inline-editor memo-inline-editor-기간수정';
+      const row = document.createElement('div');
+      row.className = 'memo-inline-editor-row';
+      const startWrap = document.createElement('div');
+      startWrap.className = 'memo-inline-editor-datefield';
+      const startLabel = document.createElement('label');
+      startLabel.textContent = '시작일';
+      const startField = document.createElement('input');
+      startField.type = 'date';
+      startField.className = 'memo-inline-editor-field';
+      startField.value = item.start;
+      startWrap.appendChild(startLabel);
+      startWrap.appendChild(startField);
+      const endWrap = document.createElement('div');
+      endWrap.className = 'memo-inline-editor-datefield';
+      const endLabel = document.createElement('label');
+      endLabel.textContent = '종료일';
+      const endField = document.createElement('input');
+      endField.type = 'date';
+      endField.className = 'memo-inline-editor-field';
+      endField.value = item.end;
+      endWrap.appendChild(endLabel);
+      endWrap.appendChild(endField);
+      row.appendChild(startWrap);
+      row.appendChild(endWrap);
+      wrap.appendChild(row);
+      const actionsRow = document.createElement('div');
+      actionsRow.className = 'memo-inline-editor-actions';
+      const saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.className = 'btn-inline-save';
+      saveBtn.textContent = '저장';
+      saveBtn.addEventListener('click', () => applyMemoPeriod(key, idx, startField.value, endField.value));
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'btn-inline-cancel';
+      cancelBtn.textContent = '취소';
+      cancelBtn.addEventListener('click', () => wrap.remove());
+      actionsRow.appendChild(saveBtn);
+      actionsRow.appendChild(cancelBtn);
+      wrap.appendChild(actionsRow);
+      div.appendChild(wrap);
+    });
+    actions.appendChild(editPeriodBtn);
+  }
 
   function makeColorBtn(label, field) {
     const btn = document.createElement('button');
@@ -2752,7 +3059,7 @@ function buildMemoItemCard(key, idx, refreshFn) {
       const pickerClass = 'color-picker-inline-' + field;
       const existing = div.querySelector('.' + pickerClass);
       if (existing) { existing.remove(); return; }
-      div.querySelectorAll('.color-picker-inline').forEach((el) => el.remove());
+      closeInlineExtras();
       const picker = document.createElement('div');
       picker.className = 'color-picker-inline ' + pickerClass;
       COLOR_PRESETS.forEach((c) => {
@@ -3686,6 +3993,7 @@ function switchAccount(acc) {
   localStorage.setItem(ACTIVE_ACCOUNT_KEY, acc);
   pushToCloud();
   memos = loadMemosFor(acc);
+  loadFreeMemo(acc);
   updateAccountButtons();
   document.getElementById('modalBg').classList.remove('show');
   updateDdayWidget();
