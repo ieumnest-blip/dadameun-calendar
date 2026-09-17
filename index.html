@@ -496,25 +496,26 @@
     word-break: keep-all;
     overflow-wrap: break-word;
   }
-  .holiday-alt-label {
+  .holiday-mark {
     position: absolute;
     left: 50%;
-    top: -18px;
+    top: -9px;
     transform: translateX(-50%);
-    font-size: 12.5px;
-    font-weight: 600;
-    color: #e06565;
-    white-space: nowrap;
-    text-align: center;
+    font-size: 10px;
     line-height: 1;
+    color: #e06565;
     z-index: 4;
     pointer-events: none;
   }
-  .holiday-alt-arrow {
-    display: block;
-    font-size: 13px;
-    line-height: 0.7;
-    margin-top: 1px;
+  .holiday-inline-name {
+    display: inline-block;
+    font-size: 9.5px;
+    font-weight: 700;
+    color: #e06565;
+    vertical-align: top;
+    line-height: 1.7;
+    margin-left: 1px;
+    white-space: nowrap;
   }
   td:active:not(.empty) { background: #e2f3fb; }
 
@@ -748,9 +749,8 @@
     .memo-more-summary { font-size: 17px; }
     .memo-preview.todo-preview input[type="checkbox"] { width: 15px; height: 15px; }
     .range-line-label { font-size: 14px; }
-    .holiday-name { font-size: 15px; }
-    .holiday-alt-label { font-size: 15px; top: -20px; }
-    .holiday-alt-arrow { font-size: 15px; }
+    .holiday-mark { font-size: 12px; top: -11px; }
+    .holiday-inline-name { font-size: 12px; }
     .day-num { width: 30px; height: 30px; line-height: 30px; }
   }
 
@@ -2356,16 +2356,15 @@ function buildMonthBlock(year, month) {
         dNum.textContent = day;
         td.appendChild(dNum);
 
-        if (holidayName === '대체공휴일') {
-          const alt = document.createElement('div');
-          alt.className = 'holiday-alt-label';
-          alt.innerHTML = '대체공휴일<span class="holiday-alt-arrow">⌄</span>';
-          td.appendChild(alt);
-        } else if (holidayName) {
-          const hName = document.createElement('div');
-          hName.className = 'holiday-name';
-          hName.textContent = holidayName;
-          td.appendChild(hName);
+        if (holidayName) {
+          const mark = document.createElement('span');
+          mark.className = 'holiday-mark';
+          mark.textContent = '⌄';
+          td.appendChild(mark);
+          const inlineName = document.createElement('span');
+          inlineName.className = 'holiday-inline-name';
+          inlineName.textContent = holidayName;
+          td.appendChild(inlineName);
         }
 
         // 기간 막대들 아래로, 하루짜리 항목들을 꽉 찬 색상 막대로 순서대로 쌓음
@@ -2459,6 +2458,8 @@ function buildMonthBlock(year, month) {
             const wrap = document.createElement('div');
             wrap.className = 'range-line';
             wrap.dataset.lane = lane;
+            wrap.dataset.startCol = seg.startCol;
+            wrap.dataset.endCol = seg.endCol;
             wrap.style.top = (LANE_TOP0 + lane * LANE_STEP) + 'px';
             wrap.style.width = (seg.length * 100) + '%';
             if (seg.startK === seg.item.start || seg.startCol === 0) wrap.classList.add('range-start');
@@ -2632,30 +2633,46 @@ function renderCalendar() {
    lane 위치와 각 칸이 확보해야 할 세로 공간을 다시 정확히 맞춘다.
    (이 보정이 없으면 글자가 긴 좁은 기간 막대가 다음 주 행을 침범할 수 있음) */
 function adjustRangeLaneHeights() {
+  const GAP = 3;
   document.querySelectorAll('.month-block tbody tr').forEach((tr) => {
-    const bars = tr.querySelectorAll('.range-line');
-    if (bars.length === 0) return;
-    const laneHeight = {};
-    let maxLane = -1;
+    const barsEls = tr.querySelectorAll('.range-line');
+    if (barsEls.length === 0) return;
+    const bars = Array.from(barsEls).map((el) => ({
+      el,
+      lane: Number(el.dataset.lane) || 0,
+      startCol: Number(el.dataset.startCol),
+      endCol: Number(el.dataset.endCol),
+      height: el.offsetHeight || LANE_STEP,
+      top: LANE_TOP0,
+    }));
+    // lane이 낮은(=먼저 배정된) 막대부터 순서대로, 실제 날짜(열)가 겹치는
+    // 더 위쪽 막대들만 고려해서 자기 위치를 정함. 겹치지 않는 다른 막대는 무시하므로
+    // 그 주에 실제로 없는 lane 때문에 헛된 간격이 생기지 않음.
+    bars.sort((a, b) => a.lane - b.lane);
     bars.forEach((bar) => {
-      const lane = Number(bar.dataset.lane) || 0;
-      const h = bar.offsetHeight || LANE_STEP;
-      if (!(lane in laneHeight) || h > laneHeight[lane]) laneHeight[lane] = h;
-      if (lane > maxLane) maxLane = lane;
+      let top = LANE_TOP0;
+      bars.forEach((other) => {
+        if (other === bar || other.lane >= bar.lane) return;
+        const overlaps = other.startCol <= bar.endCol && other.endCol >= bar.startCol;
+        if (!overlaps) return;
+        const bottom = other.top + other.height + GAP;
+        if (bottom > top) top = bottom;
+      });
+      bar.top = top;
+      bar.el.style.top = top + 'px';
     });
-    const GAP = 3;
-    const laneTop = [LANE_TOP0];
-    for (let i = 0; i <= maxLane; i++) {
-      const h = laneHeight[i] !== undefined ? laneHeight[i] : LANE_STEP;
-      laneTop[i + 1] = laneTop[i] + h + GAP;
-    }
-    bars.forEach((bar) => {
-      const lane = Number(bar.dataset.lane) || 0;
-      bar.style.top = laneTop[lane] + 'px';
-    });
-    tr.querySelectorAll('td[data-max-lane]').forEach((td) => {
-      const tdMaxLane = Number(td.dataset.maxLane);
-      const needed = laneTop[Math.min(tdMaxLane + 1, laneTop.length - 1)] + 3;
+    // 각 칸(요일)마다, 그 칸을 실제로 지나가는 막대들 중 가장 아래까지 내려가는 지점 아래로
+    // 그 날의 일반 일정 목록이 시작하도록 예약
+    Array.from(tr.children).forEach((td, colIdx) => {
+      if (!td.dataset.maxLane) return;
+      let bottomMost = 0;
+      bars.forEach((bar) => {
+        if (colIdx >= bar.startCol && colIdx <= bar.endCol) {
+          const bottom = bar.top + bar.height;
+          if (bottom > bottomMost) bottomMost = bottom;
+        }
+      });
+      const needed = bottomMost + GAP + 3;
       td.style.setProperty('--lane-min', needed + 'px');
       const list = td.querySelector('.memo-list');
       if (list) list.style.marginTop = needed + 'px';
@@ -3749,11 +3766,11 @@ function registerRange(startKey, endKey, text, color, bgColor, isTodo, alarmTime
 
 document.getElementById('addBtn').addEventListener('click', () => {
   const rawText = document.getElementById('memoText').value.trim();
-  if (!rawText) {
-    alert('내용을 입력해주세요.');
+  const titleValue = document.getElementById('memoTitle').value.trim() || null;
+  if (!rawText && !titleValue) {
+    alert('제목이나 내용 중 하나는 입력해주세요.');
     return;
   }
-  const titleValue = document.getElementById('memoTitle').value.trim() || null;
 
   let alarmTimeValue = null;
   if (alarmToggle.checked) {
