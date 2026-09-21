@@ -560,7 +560,7 @@
     padding: 0 1px;
     text-align: center;
     white-space: normal;
-    word-break: keep-all;
+    word-break: break-all;
     overflow-wrap: break-word;
   }
   .holiday-mark {
@@ -575,14 +575,17 @@
     pointer-events: none;
   }
   .holiday-inline-name {
-    display: inline-block;
+    display: block;
     font-size: 9.5px;
     font-weight: 700;
     color: #e06565;
-    vertical-align: top;
-    line-height: 1.7;
-    margin-left: 1px;
-    white-space: nowrap;
+    line-height: 1.25;
+    margin: 0;
+    padding: 0 1px;
+    text-align: center;
+    white-space: normal;
+    word-break: keep-all;
+    overflow-wrap: break-word;
   }
   td:active:not(.empty) { background: #e2f3fb; }
 
@@ -591,23 +594,10 @@
     width: 24px; height: 24px; line-height: 24px;
     position: relative;
   }
-  td.today {
-    background: rgba(61,143,192,0.14);
-    box-shadow: inset 0 0 0 2px #3d8fc0;
-  }
   td.today .day-num {
     background: #3d8fc0;
     color: #fff;
     border-radius: 50%;
-    box-shadow: 0 0 0 3px rgba(61,143,192,0.3);
-  }
-  @keyframes todayPulse {
-    0% { box-shadow: inset 0 0 0 2px #3d8fc0, 0 0 0 0 rgba(61,143,192,0.55); }
-    60% { box-shadow: inset 0 0 0 3px #1f7bb5, 0 0 0 10px rgba(61,143,192,0); }
-    100% { box-shadow: inset 0 0 0 2px #3d8fc0, 0 0 0 0 rgba(61,143,192,0); }
-  }
-  td.today-flash {
-    animation: todayPulse 0.85s ease-out 2;
   }
   /* 메모가 있는 날 - 손글씨 동그라미 */
   td.has-memo .day-num::after {
@@ -1112,20 +1102,16 @@
     border-radius: 20px;
   }
   @media (min-width: 1100px) {
-    /* 일정 추가 창은 클릭 위치 근처가 아니라 항상 화면 중앙에 뜨도록 (PC에서만) -
-       제목을 드래그하면 원하는 위치로 옮길 수 있음(makeDraggable) */
-    #quickAddBg {
+    /* 일정 추가/일정 목록/일정 상세 팝업 모두 클릭 위치 근처가 아니라 항상 화면
+       중앙에 뜨도록 함 (PC에서만) - 팝업 안 빈 공간을 드래그하면 원하는 위치로 옮길 수 있음(makeDraggable) */
+    #quickAddBg, #modalBg, #itemBg {
       align-items: center;
       justify-content: center;
     }
-    /* 날짜 클릭 시 뜨는 상세 창은 클릭한 위치 바로 근처에 작은 카드로 표시 (PC에서만) */
     #modalBg {
       background: rgba(51,80,95,0.1);
-      align-items: flex-start;
-      justify-content: flex-start;
     }
     #modalBg .modal {
-      position: fixed;
       width: 300px;
       max-width: 92vw;
       border-radius: 16px;
@@ -1135,12 +1121,9 @@
     }
     #itemBg {
       background: rgba(51,80,95,0.1);
-      align-items: flex-start;
-      justify-content: flex-start;
       z-index: 55;
     }
     #itemBg .modal {
-      position: fixed;
       width: 280px;
       max-width: 92vw;
       border-radius: 16px;
@@ -1483,15 +1466,20 @@
   .panel-banner {
     position: relative;
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: 0;
     background: #e4f1fc;
     border: none;
     border-radius: 14px;
-    padding: 10px 14px;
+    padding: 10px 14px 8px;
     margin: 4px 0 18px;
     width: 100%;
     box-sizing: border-box;
+  }
+  .panel-banner-row1 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
   .banner-cloud {
     width: 48px;
@@ -1502,6 +1490,7 @@
     display: flex;
     align-items: center;
     gap: 5px;
+    min-width: 0;
   }
   .banner-title {
     font-size: 17px;
@@ -1513,6 +1502,18 @@
   .banner-heart {
     font-size: 12px;
     flex-shrink: 0;
+  }
+  .banner-date {
+    display: block;
+    margin-left: 56px;
+    margin-top: -4px;
+    padding-left: 0;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #4a7996;
+    white-space: nowrap;
+    text-align: left;
   }
   .memo-freebox-wrap {
     background: #fff;
@@ -1856,18 +1857,21 @@
 
 <div class="memo-panel right-panel" id="ddayPanel">
   <div class="panel-banner">
-    <svg class="banner-cloud" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-      <path d="M18 10.2h-1.26A8 8 0 1 0 9 20h9a4.9 4.9 0 0 0 0-9.8z" fill="#ffffff" stroke="#8ec6f0" stroke-width="1.3" stroke-linejoin="round"/>
-      <circle cx="10.4" cy="16.1" r="0.7" fill="#5a6b7a"/>
-      <circle cx="14.6" cy="16.1" r="0.7" fill="#5a6b7a"/>
-      <circle cx="9.1" cy="17.5" r="1.05" fill="#ffb3c0"/>
-      <circle cx="15.9" cy="17.5" r="1.05" fill="#ffb3c0"/>
-      <path d="M11.7,17.4 q0.8,0.9 1.6,0" stroke="#5a6b7a" stroke-width="0.55" fill="none" stroke-linecap="round"/>
-    </svg>
-    <div class="panel-banner-inner">
-      <span class="banner-title">일정 확인</span>
-      <span class="banner-heart">💙</span>
+    <div class="panel-banner-row1">
+      <svg class="banner-cloud" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M18 10.2h-1.26A8 8 0 1 0 9 20h9a4.9 4.9 0 0 0 0-9.8z" fill="#ffffff" stroke="#8ec6f0" stroke-width="1.3" stroke-linejoin="round"/>
+        <circle cx="10.4" cy="16.1" r="0.7" fill="#5a6b7a"/>
+        <circle cx="14.6" cy="16.1" r="0.7" fill="#5a6b7a"/>
+        <circle cx="9.1" cy="17.5" r="1.05" fill="#ffb3c0"/>
+        <circle cx="15.9" cy="17.5" r="1.05" fill="#ffb3c0"/>
+        <path d="M11.7,17.4 q0.8,0.9 1.6,0" stroke="#5a6b7a" stroke-width="0.55" fill="none" stroke-linecap="round"/>
+      </svg>
+      <div class="panel-banner-inner">
+        <span class="banner-title">일정 확인</span>
+        <span class="banner-heart">💙</span>
+      </div>
     </div>
+    <span class="banner-date" id="bannerTodayDate"></span>
   </div>
   <div class="dday-widget" id="ddayWidget" style="display:none;"></div>
   <div class="memo-freebox-wrap">
@@ -2602,8 +2606,17 @@ function buildMonthBlock(year, month) {
             }
             // 그 날짜에 수정할 내용이 없으면 평소처럼 새 일정 추가로 진행
           } else if (previewEl) {
-            // 이미 등록된 일정을 그냥(Shift 없이) 클릭했을 때는 새 일정 추가 팝업이
-            // 뜨지 않게 함 - 수정/확인하려면 Shift+클릭으로 열어야 함
+            // 모바일(작은 화면)에는 Shift 키가 없으니, 일정을 그냥 누르면
+            // 바로 확인/수정 팝업이 뜨도록 함
+            if (window.innerWidth < 1100) {
+              if (previewEl.dataset.idx !== undefined) {
+                const dateKey = previewEl.dataset.date || k;
+                openItemPopup(dateKey, Number(previewEl.dataset.idx), previewEl);
+              }
+              return;
+            }
+            // PC에서는 이미 등록된 일정을 그냥(Shift 없이) 클릭했을 때는 새 일정 추가
+            // 팝업이 뜨지 않게 함 - 수정/확인하려면 Shift+클릭으로 열어야 함
             return;
           }
           openQuickAdd(k, null, e.currentTarget);
@@ -2810,20 +2823,32 @@ function adjustRangeLaneHeights() {
   document.querySelectorAll('.month-block tbody tr').forEach((tr) => {
     const barsEls = tr.querySelectorAll('.range-line');
     if (barsEls.length === 0) return;
+    // 공휴일 이름이 길어서 두 줄로 감싸진 칸이 있으면, 그 칸 위를 지나가는 기간 막대는
+    // 공휴일 글자 아래로 내려와야 겹치지 않음 - 실제 렌더된 높이를 측정해 행 전체의
+    // 시작 top 기준값을 보정한다.
+    let rowTop0 = LANE_TOP0;
+    Array.from(tr.children).forEach((td) => {
+      if (!td.classList.contains('holiday')) return;
+      const dayNum = td.querySelector('.day-num');
+      const holidayEl = td.querySelector('.holiday-inline-name');
+      if (!dayNum) return;
+      const bottom = holidayEl ? (holidayEl.offsetTop + holidayEl.offsetHeight) : (dayNum.offsetTop + dayNum.offsetHeight);
+      if (bottom + 2 > rowTop0) rowTop0 = bottom + 2;
+    });
     const bars = Array.from(barsEls).map((el) => ({
       el,
       lane: Number(el.dataset.lane) || 0,
       startCol: Number(el.dataset.startCol),
       endCol: Number(el.dataset.endCol),
       height: el.offsetHeight || LANE_STEP,
-      top: LANE_TOP0,
+      top: rowTop0,
     }));
     // lane이 낮은(=먼저 배정된) 막대부터 순서대로, 실제 날짜(열)가 겹치는
     // 더 위쪽 막대들만 고려해서 자기 위치를 정함. 겹치지 않는 다른 막대는 무시하므로
     // 그 주에 실제로 없는 lane 때문에 헛된 간격이 생기지 않음.
     bars.sort((a, b) => a.lane - b.lane);
     bars.forEach((bar) => {
-      let top = LANE_TOP0;
+      let top = rowTop0;
       bars.forEach((other) => {
         if (other === bar || other.lane >= bar.lane) return;
         const overlaps = other.startCol <= bar.endCol && other.endCol >= bar.startCol;
@@ -3425,6 +3450,12 @@ function openModal(key, anchorEl) {
     itemBgEl.classList.remove('show');
   }
   if (anchorEl) lastModalAnchor = anchorEl;
+  const modalBgWasOpen = document.getElementById('modalBg').classList.contains('show');
+  const prevModalEl = document.querySelector('#modalBg .modal');
+  const prevPos = modalBgWasOpen ? prevModalEl.style.position : '';
+  const prevTop = modalBgWasOpen ? prevModalEl.style.top : '';
+  const prevLeft = modalBgWasOpen ? prevModalEl.style.left : '';
+  const prevMargin = modalBgWasOpen ? prevModalEl.style.margin : '';
   document.getElementById('modalDate').textContent = key + ' 메모';
   const list = document.getElementById('memoList');
   list.innerHTML = '';
@@ -3464,24 +3495,18 @@ function openModal(key, anchorEl) {
   document.getElementById('modalBg').classList.add('show');
 
   const modalEl = document.querySelector('#modalBg .modal');
-  if (lastModalAnchor && modalEl) {
-    const rect = lastModalAnchor.getBoundingClientRect();
-    const modalWidth = Math.min(300, window.innerWidth * 0.92);
-    let left = rect.left;
-    let top = rect.bottom + 8;
-    // 화면 오른쪽 밖으로 나가지 않게 보정
-    if (left + modalWidth > window.innerWidth - 12) {
-      left = window.innerWidth - modalWidth - 12;
-    }
-    if (left < 12) left = 12;
-    // 아래쪽 공간이 부족하면 날짜 칸 위쪽에 띄움
-    const estHeight = Math.min(modalEl.scrollHeight || 300, window.innerHeight * 0.7);
-    if (top + estHeight > window.innerHeight - 12) {
-      top = rect.top - estHeight - 8;
-      if (top < 12) top = 12;
-    }
-    modalEl.style.top = top + 'px';
-    modalEl.style.left = left + 'px';
+  if (modalBgWasOpen) {
+    // 이미 열려있던 창을 새로고침하는 경우 - 사용자가 옮겨둔 위치를 그대로 유지
+    modalEl.style.position = prevPos;
+    modalEl.style.top = prevTop;
+    modalEl.style.left = prevLeft;
+    modalEl.style.margin = prevMargin;
+  } else {
+    // 새로 여는 경우 - 항상 화면 중앙에서 시작 (빈 공간을 드래그하면 옮길 수 있음)
+    modalEl.style.position = '';
+    modalEl.style.top = '';
+    modalEl.style.left = '';
+    modalEl.style.margin = '';
   }
 }
 
@@ -3527,13 +3552,13 @@ let lastItemAnchor = null;
 function openItemPopup(key, idx, anchorEl) {
   const itemBgEl = document.getElementById('itemBg');
   const modalEl = document.querySelector('#itemBg .modal');
-  // 새로고침(내용 수정 등으로 다시 그릴 때)인 경우, 달력이 다시 그려지면서
-  // 예전 anchorEl(날짜 칸/일정 막대)이 화면에서 사라져 있을 수 있다.
-  // 그런 stale anchor로 위치를 다시 계산하면 (0,0) 근처로 튕기므로,
-  // 지금 떠 있는 위치를 미리 기억해뒀다가 그 자리를 그대로 유지한다.
+  // 새로고침(내용 수정 등으로 다시 그릴 때)인 경우, 사용자가 드래그로 옮겨둔
+  // 위치를 그대로 유지한다. 새로 여는 경우에는 항상 화면 중앙에서 시작한다.
   const wasOpen = itemBgEl.classList.contains('show');
+  const prevPos = wasOpen ? modalEl.style.position : '';
   const prevTop = wasOpen ? modalEl.style.top : '';
   const prevLeft = wasOpen ? modalEl.style.left : '';
+  const prevMargin = wasOpen ? modalEl.style.margin : '';
 
   if (anchorEl) lastItemAnchor = anchorEl;
   const item = memos[key] && memos[key][idx];
@@ -3553,14 +3578,16 @@ function openItemPopup(key, idx, anchorEl) {
   content.appendChild(buildMemoItemCard(key, idx, () => openItemPopup(key, idx, anchorEl)));
   itemBgEl.classList.add('show');
 
-  const validAnchor = (anchorEl && document.body.contains(anchorEl)) ? anchorEl
-    : (lastItemAnchor && document.body.contains(lastItemAnchor)) ? lastItemAnchor
-    : null;
-  if (validAnchor) {
-    positionPopupNear(modalEl, validAnchor);
-  } else if (prevTop && prevLeft) {
+  if (wasOpen) {
+    modalEl.style.position = prevPos;
     modalEl.style.top = prevTop;
     modalEl.style.left = prevLeft;
+    modalEl.style.margin = prevMargin;
+  } else {
+    modalEl.style.position = '';
+    modalEl.style.top = '';
+    modalEl.style.left = '';
+    modalEl.style.margin = '';
   }
 }
 
@@ -4554,6 +4581,15 @@ setInterval(checkAlarms, 30000);
 checkAlarms();
 updateDdayWidget();
 
+(function showBannerTodayDate() {
+  const el = document.getElementById('bannerTodayDate');
+  if (!el) return;
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, '0');
+  const d = String(today.getDate()).padStart(2, '0');
+  el.textContent = `${y}년 ${m}월 ${d}일`;
+})();
+
 document.getElementById('calNavPrev').addEventListener('click', () => {
   document.getElementById('prevMonth').click();
 });
@@ -4564,17 +4600,6 @@ document.getElementById('calNavNext').addEventListener('click', () => {
 document.getElementById('todayJumpBtn').addEventListener('click', () => {
   const t = new Date();
   selectMonth(t.getFullYear(), t.getMonth(), true);
-  // 오늘 날짜 칸이 눈에 잘 띄도록 잠깐 반짝이는 효과를 줌
-  document.querySelectorAll('td.today-flash').forEach((el) => el.classList.remove('today-flash'));
-  const todayTd = document.querySelector('.month-block td.today');
-  if (todayTd) {
-    // reflow를 강제해서 클래스를 다시 넣었을 때도 애니메이션이 재생되게 함
-    void todayTd.offsetWidth;
-    todayTd.classList.add('today-flash');
-    todayTd.addEventListener('animationend', () => {
-      todayTd.classList.remove('today-flash');
-    }, { once: true });
-  }
 });
 
 renderCalendar();
