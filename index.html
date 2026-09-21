@@ -1198,6 +1198,12 @@
     text-overflow: ellipsis;
   }
   .memo-item-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .memo-order-btn {
+    background: #eaf4fb;
+    border: 1px solid #bfe0f5;
+    color: #2f7aa8;
+    font-weight: 600;
+  }
   .color-picker-inline {
     display: flex;
     flex-wrap: wrap;
@@ -1708,6 +1714,62 @@
     60% { transform: rotate(-8deg); }
     80% { transform: rotate(6deg); }
   }
+
+  /* ===== 일정을 길게 눌러서 다른 날짜로 옮기기(이동 모드) ===== */
+  .move-mode-banner {
+    display: none;
+    position: fixed;
+    left: 50%;
+    bottom: 18px;
+    transform: translateX(-50%);
+    z-index: 1300;
+    background: #2f3f4d;
+    color: #fff;
+    padding: 10px 12px 10px 16px;
+    border-radius: 999px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    max-width: calc(100vw - 32px);
+  }
+  .move-mode-banner.show { display: flex; }
+  #moveModeBannerText {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 62vw;
+  }
+  .move-mode-banner #moveModeCancelBtn {
+    background: rgba(255,255,255,0.16);
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  /* 이동 모드일 때: 옮기고 있는 원본 항목은 흐리게, 달력 칸들은 눌러서 고를 수 있음을 표시 */
+  .memo-preview.move-mode-source, .range-line-label.move-mode-source {
+    opacity: 0.4;
+    outline: 2px dashed #3d8fc0;
+    outline-offset: 1px;
+  }
+  body.move-mode td:not(.empty) {
+    cursor: pointer;
+    background: rgba(61,143,192,0.06);
+  }
+  body.move-mode td:not(.empty):active {
+    background: rgba(61,143,192,0.22);
+  }
+  @keyframes moveModePop {
+    from { transform: translateX(-50%) scale(0.85); opacity: 0; }
+    to { transform: translateX(-50%) scale(1); opacity: 1; }
+  }
+  .move-mode-banner.show { animation: moveModePop 0.2s ease; }
   .alarm-time {
     font-size: 20px;
     font-weight: 700;
@@ -2093,6 +2155,11 @@
   </div>
 </div>
 
+<div class="move-mode-banner" id="moveModeBanner">
+  <span id="moveModeBannerText">📌 옮길 날짜를 눌러주세요</span>
+  <button type="button" id="moveModeCancelBtn">취소</button>
+</div>
+
 <script>
 /* ===== Firebase 클라우드 동기화 (로그인한 사용자별로 데이터 분리) ===== */
 const firebaseConfig = {
@@ -2293,11 +2360,31 @@ document.getElementById('freeMemoBox')?.addEventListener('paste', (e) => {
   }
 });
 
+/* 일정 순서(위/아래, 기간 막대 쌓임 순서)를 사용자가 임의로 바꿀 수 있도록
+   각 항목에 order(숫자, 작을수록 위/먼저) 값을 부여해서 관리함.
+   새 항목은 항상 orderCounter를 하나씩 늘려가며 받아서 항상 맨 뒤(가장 나중)로 감. */
+let orderCounter = Date.now();
+function nextOrder() { return orderCounter++; }
+
 function migrateMemosObj(obj) {
-  Object.keys(obj).forEach((k) => {
-    obj[k] = obj[k].map((it) =>
-      typeof it === 'string' ? { text: it, groupId: null, start: null, end: null } : it
-    );
+  // 예전 데이터(순서값이 없는 항목)는 날짜순 + 기존 배치 순서 그대로 order를 부여해서
+  // 지금까지 보이던 순서가 그대로 유지되게 함.
+  const groupOrder = new Map();
+  let migrateCounter = 1;
+  const dateKeys = Object.keys(obj).sort();
+  dateKeys.forEach((k) => {
+    obj[k] = obj[k].map((it) => {
+      const item = typeof it === 'string' ? { text: it, groupId: null, start: null, end: null } : it;
+      if (typeof item.order !== 'number') {
+        if (item.groupId) {
+          if (!groupOrder.has(item.groupId)) groupOrder.set(item.groupId, migrateCounter++);
+          item.order = groupOrder.get(item.groupId);
+        } else {
+          item.order = migrateCounter++;
+        }
+      }
+      return item;
+    });
   });
   return obj;
 }
@@ -2469,8 +2556,17 @@ function buildMonthBlock(year, month) {
     const laneEndDay = []; // lane 번호 -> 그 lane을 마지막으로 점유하는 날짜(일)
     for (let d = 1; d <= daysInMonth; d++) {
       const k = keyOf(year, month, d);
+      // 같은 날 새로 시작하는 기간이 여러 개면, 배열에 들어있는 순서가 아니라
+      // order 값(사용자가 위/아래로 바꿀 수 있는 값) 순서대로 lane을 배정해서
+      // 사용자가 순서를 바꾸면 실제로 위/아래(어느 막대가 위 lane인지)가 바뀌게 함.
+      const newGroupsToday = [];
       (memos[k] || []).forEach((it) => {
         if (!it.groupId || laneOf.has(it.groupId)) return;
+        if (newGroupsToday.some((g) => g.groupId === it.groupId)) return;
+        newGroupsToday.push(it);
+      });
+      newGroupsToday.sort((a, b) => (a.order || 0) - (b.order || 0));
+      newGroupsToday.forEach((it) => {
         // 이 그룹이 이 달 안에서 끝나는 날짜(일). 다음 달로 이어지면 이 달 마지막 날로 고정.
         let endDay = daysInMonth;
         if (it.end) {
@@ -2502,7 +2598,7 @@ function buildMonthBlock(year, month) {
         const k = keyOf(year, month, day);
         const items = memos[k] || [];
         const rangeItems = items.filter((it) => it.groupId);
-        const normalItems = items.filter((it) => !it.groupId);
+        const normalItems = items.filter((it) => !it.groupId).sort((a, b) => (a.order || 0) - (b.order || 0));
         const holidayName = HOLIDAYS[k];
         if (normalItems.length > 0) {
           td.classList.add('has-memo');
@@ -2568,6 +2664,7 @@ function buildMonthBlock(year, month) {
               prow.appendChild(cb);
               prow.appendChild(txt);
               list.appendChild(prow);
+              attachLongPressMove(prow, () => ({ type: 'normal', key: k, idx: itemIdx, text: it.text }));
             } else {
               const prow = document.createElement('div');
               prow.className = 'memo-preview';
@@ -2576,6 +2673,7 @@ function buildMonthBlock(year, month) {
               prow.textContent = (it.alarmTime ? '⏰ ' : '') + (it.isDday && it.ddayTarget ? '[' + computeDdayLabel(it.ddayTarget) + '] ' : '') + previewLabel(it);
               if (it.color) prow.style.color = it.color;
               list.appendChild(prow);
+              attachLongPressMove(prow, () => ({ type: 'normal', key: k, idx: itemIdx, text: it.text }));
             }
           });
           td.appendChild(list);
@@ -2583,12 +2681,18 @@ function buildMonthBlock(year, month) {
 
         td.dataset.date = k;
         td.addEventListener('mousedown', (e) => {
+          if (moveMode) return;
           if (window.innerWidth < 1100) return;
           if (e.shiftKey) { e.preventDefault(); return; }
           dragState = { startKey: k, currentKey: k };
           dragMoved = false;
         });
         td.addEventListener('click', (e) => {
+          if (moveMode) {
+            e.preventDefault();
+            completeMoveMode(k);
+            return;
+          }
           if (dragMoved) { dragMoved = false; return; }
           document.getElementById('manageBg').classList.remove('show');
           selectDate(k);
@@ -2668,6 +2772,10 @@ function buildMonthBlock(year, month) {
             label.textContent = seg.item.isTodo ? (seg.item.done ? '☑ ' : '☐ ') + (seg.item.title || firstLine(seg.item.text)) : (seg.item.title || firstLine(seg.item.text));
             if (seg.item.isTodo && seg.item.done) label.classList.add('todo-done-preview');
             wrap.appendChild(label);
+            // seg 변수는 이 forEach 반복이 진행되면서 계속 재사용/변경되므로, 길게 누르기가
+            // 실제로 발동하는(나중) 시점에 엉뚱한 값을 읽지 않도록 지금 값을 따로 붙잡아둠.
+            const segItemForMove = seg.item;
+            attachLongPressMove(label, () => ({ type: 'group', groupId: segItemForMove.groupId, start: segItemForMove.start, end: segItemForMove.end, text: segItemForMove.text }));
 
             seg.startTd.appendChild(wrap);
           }
@@ -3003,6 +3111,168 @@ function applyMemoPeriod(key, idx, newStart, newEnd) {
   if (newStartK) refreshMemoPopup(newStartK, memos[newStartK].length - 1);
 }
 
+/* 하루짜리(기간 아님) 일정 하나를 다른 날짜로 옮김. 순서(order)는 그대로 유지. */
+function moveNormalItemToDate(key, idx, newKey) {
+  if (!memos[key] || !memos[key][idx]) return null;
+  if (key === newKey) return key;
+  const [item] = memos[key].splice(idx, 1);
+  if (memos[key].length === 0) delete memos[key];
+  if (!memos[newKey]) memos[newKey] = [];
+  memos[newKey].push(item);
+  saveMemos();
+  return newKey;
+}
+
+/* 일정 하나를 그 날의 다른 일정(하루짜리끼리) 혹은, 기간 일정이면 겹치는 다른 기간 일정과
+   순서(order)를 맞바꿔서 위/아래(쌓이는 순서, lane)를 사용자가 원하는 대로 바꿀 수 있게 함. */
+function reorderItem(key, idx, direction) {
+  const item = memos[key] && memos[key][idx];
+  if (!item) return;
+
+  if (item.groupId) {
+    // 이 달력에 등록된 모든 기간(그룹)을 하나씩만 모음 (그룹마다 order/기간 대표값 1개)
+    const groupsMap = new Map();
+    Object.keys(memos).forEach((k) => {
+      memos[k].forEach((it) => {
+        if (it.groupId && !groupsMap.has(it.groupId)) {
+          groupsMap.set(it.groupId, { order: it.order || 0, start: it.start, end: it.end });
+        }
+      });
+    });
+    const cur = groupsMap.get(item.groupId);
+    if (!cur) return;
+    // 날짜가 서로 겹치는(같은 주/줄에 같이 보일 수 있는) 기간들만 대상으로,
+    // order 순서대로 정렬해서 바로 앞/뒤 것과 자리를 바꿈.
+    const overlapping = Array.from(groupsMap.entries())
+      .filter(([gid, g]) => gid === item.groupId || (g.start <= cur.end && g.end >= cur.start))
+      .sort((a, b) => a[1].order - b[1].order);
+    const pos = overlapping.findIndex(([gid]) => gid === item.groupId);
+    const swapPos = direction === 'up' ? pos - 1 : pos + 1;
+    if (swapPos < 0 || swapPos >= overlapping.length) return;
+    const [otherGid] = overlapping[swapPos];
+    const myOrder = cur.order;
+    const otherOrder = groupsMap.get(otherGid).order;
+    Object.keys(memos).forEach((k) => {
+      memos[k].forEach((it) => {
+        if (it.groupId === item.groupId) it.order = otherOrder;
+        else if (it.groupId === otherGid) it.order = myOrder;
+      });
+    });
+  } else {
+    // 같은 날짜의, 마찬가지로 하루짜리인 다른 일정들과만 순서를 비교/교환
+    const siblings = memos[key]
+      .map((it, i) => ({ it, i }))
+      .filter(({ it }) => !it.groupId)
+      .sort((a, b) => (a.it.order || 0) - (b.it.order || 0));
+    const pos = siblings.findIndex(({ i }) => i === idx);
+    const swapPos = direction === 'up' ? pos - 1 : pos + 1;
+    if (swapPos < 0 || swapPos >= siblings.length) return;
+    const otherIt = siblings[swapPos].it;
+    const myOrder = item.order || 0;
+    const otherOrder = otherIt.order || 0;
+    item.order = otherOrder;
+    otherIt.order = myOrder;
+  }
+  saveMemos();
+  renderCalendar();
+  updateDdayWidget();
+}
+
+/* ===== 일정을 길게 눌러서 다른 날짜로 옮기기 ===== */
+let moveMode = null; // { type:'normal', key, idx, text } 또는 { type:'group', groupId, start, end, text }
+
+function shiftKeyByDays(key, days) {
+  const d = keyToDate(key);
+  d.setDate(d.getDate() + days);
+  return keyOf(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function daysBetweenKeys(key1, key2) {
+  const d1 = keyToDate(key1), d2 = keyToDate(key2);
+  return Math.round((d2 - d1) / 86400000);
+}
+
+function beginMoveMode(payload, sourceEl) {
+  moveMode = payload;
+  document.body.classList.add('move-mode');
+  document.querySelectorAll('.move-mode-source').forEach((el) => el.classList.remove('move-mode-source'));
+  if (sourceEl) sourceEl.classList.add('move-mode-source');
+  document.getElementById('moveModeBannerText').textContent = `📌 "${(payload.text || '').slice(0, 16)}" 을(를) 옮길 날짜를 눌러주세요`;
+  document.getElementById('moveModeBanner').classList.add('show');
+  // 다른 팝업이 열려있으면 날짜를 고르기 어려우니 닫아둔다.
+  document.getElementById('modalBg').classList.remove('show');
+  document.getElementById('itemBg').classList.remove('show');
+}
+
+function endMoveMode() {
+  moveMode = null;
+  document.body.classList.remove('move-mode');
+  document.querySelectorAll('.move-mode-source').forEach((el) => el.classList.remove('move-mode-source'));
+  document.getElementById('moveModeBanner').classList.remove('show');
+}
+
+function completeMoveMode(newKey) {
+  const mode = moveMode;
+  if (!mode) return;
+  if (mode.type === 'normal') {
+    moveNormalItemToDate(mode.key, mode.idx, newKey);
+  } else if (mode.type === 'group') {
+    const delta = daysBetweenKeys(mode.start, newKey);
+    const newStart = shiftKeyByDays(mode.start, delta);
+    const newEnd = shiftKeyByDays(mode.end, delta);
+    moveRangeGroup(mode.groupId, newStart, newEnd);
+  }
+  endMoveMode();
+  renderCalendar();
+  updateDdayWidget();
+}
+
+document.getElementById('moveModeCancelBtn').addEventListener('click', () => endMoveMode());
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && moveMode) endMoveMode();
+});
+
+/* 일정 항목(prow/label)에 "길게 누르기"를 붙여서, 손을 떼지 않고 있으면(500ms) 이동 모드로
+   들어가게 함. 마우스(PC)와 터치(모바일) 모두 Pointer Events로 한 번에 처리.
+   getPayload는 실제로 길게 눌렸을 때 호출되어 최신 상태를 반영함. */
+function attachLongPressMove(el, getPayload) {
+  const HOLD_MS = 500;
+  const MOVE_TOLERANCE = 10;
+  let timer = null;
+  let startX = 0, startY = 0;
+  let longPressed = false;
+
+  function cancelTimer() {
+    if (timer) { clearTimeout(timer); timer = null; }
+  }
+
+  el.style.touchAction = 'manipulation';
+  el.addEventListener('pointerdown', (e) => {
+    if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
+    startX = e.clientX; startY = e.clientY;
+    longPressed = false;
+    cancelTimer();
+    timer = setTimeout(() => {
+      longPressed = true;
+      beginMoveMode(getPayload(), el);
+    }, HOLD_MS);
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (!timer) return;
+    if (Math.abs(e.clientX - startX) > MOVE_TOLERANCE || Math.abs(e.clientY - startY) > MOVE_TOLERANCE) cancelTimer();
+  });
+  el.addEventListener('pointerup', cancelTimer);
+  el.addEventListener('pointerleave', cancelTimer);
+  el.addEventListener('pointercancel', cancelTimer);
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
+  el.addEventListener('click', (e) => {
+    if (longPressed) {
+      e.preventDefault();
+      e.stopPropagation();
+      longPressed = false;
+    }
+  });
+}
+
 let suppressModalHistoryClose = false; // 팝업을 다른 팝업으로 '교체'할 때, 뒤로가기 히스토리가 꼬이지 않도록 하는 플래그
 let openColorPickerState = null; // { key, idx, field } - 색상 팔레트를 펼쳐둔 상태로 재렌더링해도 유지하기 위함
 const COLOR_PRESETS = ['', '#ffd23c', '#f4a83a', '#e06565', '#c2255c', '#5fbf7a', '#7a8b3f', '#a8d94f', '#4fd1c5', '#22c1c3', '#6ec3e8', '#3d8fc0', '#3b5bdb', '#5b4fc7', '#a880e0', '#b8a9e3', '#e07fb8', '#ff8c69', '#a67c52', '#8a95a0', '#4a4a4a', '#b5a642'];
@@ -3190,6 +3460,28 @@ function buildMemoItemCard(key, idx, refreshFn) {
 
   const actions = document.createElement('div');
   actions.className = 'memo-item-actions';
+
+  const upBtn = document.createElement('button');
+  upBtn.type = 'button';
+  upBtn.className = 'memo-order-btn';
+  upBtn.textContent = '▲ 위로';
+  upBtn.title = '이 일정을 위로 옮기기';
+  upBtn.addEventListener('click', () => {
+    reorderItem(key, idx, 'up');
+    if (refreshFn) refreshFn();
+  });
+  actions.appendChild(upBtn);
+
+  const downBtn = document.createElement('button');
+  downBtn.type = 'button';
+  downBtn.className = 'memo-order-btn';
+  downBtn.textContent = '▼ 아래로';
+  downBtn.title = '이 일정을 아래로 옮기기';
+  downBtn.addEventListener('click', () => {
+    reorderItem(key, idx, 'down');
+    if (refreshFn) refreshFn();
+  });
+  actions.appendChild(downBtn);
 
   function closeInlineExtras() {
     div.querySelectorAll('.memo-inline-editor, .color-picker-inline').forEach((el) => el.remove());
@@ -3466,7 +3758,8 @@ function openModal(key, anchorEl) {
     empty.textContent = '등록된 내용이 없어요.';
     list.appendChild(empty);
   } else {
-    items.forEach((item, idx) => {
+    const sortedIdx = items.map((item, idx) => idx).sort((a, b) => (items[a].order || 0) - (items[b].order || 0));
+    sortedIdx.forEach((idx) => {
       list.appendChild(buildMemoItemCard(key, idx, () => openModal(key)));
     });
   }
@@ -3483,7 +3776,7 @@ function openModal(key, anchorEl) {
     const v = addInput.value.trim();
     if (!v) return;
     if (!memos[key]) memos[key] = [];
-    memos[key].push({ text: v, groupId: null, start: null, end: null, color: selectedColor, bgColor: selectedBgColor });
+    memos[key].push({ text: v, groupId: null, start: null, end: null, color: selectedColor, bgColor: selectedBgColor, order: nextOrder() });
     saveMemos();
     renderCalendar();
     openModal(key);
@@ -4120,12 +4413,13 @@ function registerRange(startKey, endKey, text, color, bgColor, isTodo, alarmTime
   const startK = keyOf(s.getFullYear(), s.getMonth(), s.getDate());
   const endK = keyOf(e.getFullYear(), e.getMonth(), e.getDate());
   const groupId = `rg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const groupOrder = nextOrder();
   const cur = new Date(s);
   let count = 0;
   while (cur <= e && count < 400) {
     const k = keyOf(cur.getFullYear(), cur.getMonth(), cur.getDate());
     if (!memos[k]) memos[k] = [];
-    memos[k].push({ text, title: title || null, groupId, start: startK, end: endK, color: color || null, bgColor: bgColor || null, isTodo: !!isTodo, done: false, alarmTime: alarmTime || null, alarmFired: false, isDday: !!isDday, ddayTarget: isDday ? endK : null, image: image || null });
+    memos[k].push({ text, title: title || null, groupId, start: startK, end: endK, color: color || null, bgColor: bgColor || null, isTodo: !!isTodo, done: false, alarmTime: alarmTime || null, alarmFired: false, isDday: !!isDday, ddayTarget: isDday ? endK : null, image: image || null, order: groupOrder });
     cur.setDate(cur.getDate() + 1);
     count++;
   }
@@ -4208,7 +4502,7 @@ document.getElementById('addBtn').addEventListener('click', () => {
   const repeatMode = repeatSelect.value;
   if (repeatMode === 'none') {
     if (!memos[normalized]) memos[normalized] = [];
-    memos[normalized].push({ text: rawText, title: titleValue, groupId: null, start: null, end: null, color: selectedColor, bgColor: selectedBgColor, isTodo: todoToggle.checked, done: false, alarmTime: alarmTimeValue, alarmFired: false, isDday: ddayValue, ddayTarget: ddayValue ? normalized : null, image: pendingImageData });
+    memos[normalized].push({ text: rawText, title: titleValue, groupId: null, start: null, end: null, color: selectedColor, bgColor: selectedBgColor, isTodo: todoToggle.checked, done: false, alarmTime: alarmTimeValue, alarmFired: false, isDday: ddayValue, ddayTarget: ddayValue ? normalized : null, image: pendingImageData, order: nextOrder() });
     saveMemos();
   } else {
     const untilKey = repeatUntilInput.value.trim() ? normalizeDate(repeatUntilInput.value) : null;
@@ -4225,7 +4519,7 @@ document.getElementById('addBtn').addEventListener('click', () => {
       const k = keyOf(cur.getFullYear(), cur.getMonth(), cur.getDate());
       if (untilDate && cur > untilDate) break;
       if (!memos[k]) memos[k] = [];
-      memos[k].push({ text: rawText, title: titleValue, groupId: null, start: null, end: null, color: selectedColor, bgColor: selectedBgColor, isTodo: todoToggle.checked, done: false, alarmTime: alarmTimeValue, alarmFired: false, isDday: false, ddayTarget: null, repeatId, image: pendingImageData });
+      memos[k].push({ text: rawText, title: titleValue, groupId: null, start: null, end: null, color: selectedColor, bgColor: selectedBgColor, isTodo: todoToggle.checked, done: false, alarmTime: alarmTimeValue, alarmFired: false, isDday: false, ddayTarget: null, repeatId, image: pendingImageData, order: nextOrder() });
       if (repeatMode === 'weekly') {
         cur.setDate(cur.getDate() + 7);
       } else {
@@ -4440,16 +4734,18 @@ document.getElementById('imgLightbox').addEventListener('click', () => {
 /* ===== 오늘의 일정 (좌측 패널, 달력을 클릭하지 않아도 오늘 등록된 내용을 바로 확인) ===== */
 function renderAgendaInto(dateKey, boxId, emptyText) {
   const box = document.getElementById(boxId);
-  const items = memos[dateKey] || [];
+  const rawItems = memos[dateKey] || [];
+  const sortedIdx = rawItems.map((it, idx) => idx).sort((a, b) => (rawItems[a].order || 0) - (rawItems[b].order || 0));
   box.innerHTML = '';
-  if (items.length === 0) {
+  if (rawItems.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty-memo';
     empty.textContent = emptyText;
     box.appendChild(empty);
     return;
   }
-  items.forEach((it, idx) => {
+  sortedIdx.forEach((idx) => {
+    const it = rawItems[idx];
     const row = document.createElement('div');
     row.className = 'agenda-item';
     if (it.isTodo) {
