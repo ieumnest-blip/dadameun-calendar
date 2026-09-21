@@ -192,6 +192,37 @@
   }
   .logo .txt b { color: #1f7bb5; }
 
+  .today-jump-btn {
+    font-family: inherit;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-left: 4px;
+    width: 46px; height: 34px;
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+  }
+  .today-jump-btn svg.today-cloud {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    filter: drop-shadow(0 2px 4px rgba(140,160,220,0.35));
+  }
+  .today-jump-btn .today-jump-label {
+    position: relative;
+    z-index: 1;
+    font-size: 9.5px;
+    font-weight: 700;
+    color: #1f7bb5;
+    margin-top: 2px;
+    white-space: nowrap;
+  }
+  .today-jump-btn:active { transform: scale(0.94); }
+
   .month-nav {
     display: flex;
     align-items: center;
@@ -681,6 +712,13 @@
       gap: 14px;
       max-width: none;
     }
+    .today-jump-btn {
+      width: 68px; height: 48px;
+      margin-left: 6px;
+    }
+    .today-jump-btn .today-jump-label {
+      font-size: 12.5px;
+    }
     .month-nav { width: 100%; justify-content: space-between; }
     .month-nav button {
       width: 38px; height: 28px;
@@ -838,6 +876,12 @@
   }
   .date-input-wrap input[type="date"] {
     position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none;
+  }
+  .date-input-wrap .today-btn {
+    font-size: 12px;
+    font-weight: 700;
+    color: #3d8fc0;
+    padding: 6px 6px;
   }
   .input-row1 textarea.memo-text {
     flex: 1; min-width: 0;
@@ -1019,6 +1063,12 @@
     border-radius: 20px;
   }
   @media (min-width: 1100px) {
+    /* 일정 추가 창은 클릭 위치 근처가 아니라 항상 화면 중앙에 뜨도록 (PC에서만) -
+       제목을 드래그하면 원하는 위치로 옮길 수 있음(makeDraggable) */
+    #quickAddBg {
+      align-items: center;
+      justify-content: center;
+    }
     /* 날짜 클릭 시 뜨는 상세 창은 클릭한 위치 바로 근처에 작은 카드로 표시 (PC에서만) */
     #modalBg {
       background: rgba(51,80,95,0.1);
@@ -1691,6 +1741,35 @@
         <span class="stamp">note</span>
         <span class="txt"><b>다담은,</b> 달력</span>
       </div>
+      <button type="button" class="today-jump-btn" id="todayJumpBtn" title="오늘이 있는 달로 이동">
+        <svg class="today-cloud" viewBox="0 0 100 70" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          <g fill="#3d8fc0">
+            <circle cx="50.0" cy="24.0" r="22.6"/>
+            <circle cx="67.36" cy="27.51" r="22.6"/>
+            <circle cx="76.59" cy="36.4" r="19.6"/>
+            <circle cx="73.38" cy="46.5" r="19.6"/>
+            <circle cx="59.23" cy="53.1" r="19.6"/>
+            <circle cx="40.77" cy="53.1" r="19.6"/>
+            <circle cx="26.62" cy="46.5" r="19.6"/>
+            <circle cx="23.41" cy="36.4" r="19.6"/>
+            <circle cx="32.64" cy="27.51" r="22.6"/>
+            <circle cx="50" cy="39" r="20"/>
+          </g>
+          <g fill="#ffffff">
+            <circle cx="50.0" cy="24.0" r="20"/>
+            <circle cx="67.36" cy="27.51" r="20"/>
+            <circle cx="76.59" cy="36.4" r="17"/>
+            <circle cx="73.38" cy="46.5" r="17"/>
+            <circle cx="59.23" cy="53.1" r="17"/>
+            <circle cx="40.77" cy="53.1" r="17"/>
+            <circle cx="26.62" cy="46.5" r="17"/>
+            <circle cx="23.41" cy="36.4" r="17"/>
+            <circle cx="32.64" cy="27.51" r="20"/>
+            <circle cx="50" cy="39" r="20"/>
+          </g>
+        </svg>
+        <span class="today-jump-label">📅오늘</span>
+      </button>
       <div class="account-picker" id="accountPicker">
         <button type="button" class="acc-card" data-acc="1">
           <span class="acc-emoji">💤</span>
@@ -1766,6 +1845,7 @@
   <div class="input-row1">
     <div class="date-input-wrap">
       <input type="text" id="memoDateText" placeholder="YYYY-MM-DD" inputmode="numeric" maxlength="10">
+      <button id="todayBtn" type="button" class="today-btn">오늘</button>
       <button id="openPicker" type="button">📅</button>
       <input type="date" id="memoDateNative">
     </div>
@@ -2454,8 +2534,8 @@ function buildMonthBlock(year, month) {
           if (dragMoved) { dragMoved = false; return; }
           document.getElementById('manageBg').classList.remove('show');
           selectDate(k);
+          const previewEl = e.target.closest('.memo-preview, .range-line-label');
           if (e.shiftKey) {
-            const previewEl = e.target.closest('.memo-preview, .range-line-label');
             const dayItems = memos[k];
             if (previewEl && previewEl.dataset.idx !== undefined) {
               const dateKey = previewEl.dataset.date || k;
@@ -2467,6 +2547,10 @@ function buildMonthBlock(year, month) {
               return;
             }
             // 그 날짜에 수정할 내용이 없으면 평소처럼 새 일정 추가로 진행
+          } else if (previewEl) {
+            // 이미 등록된 일정을 그냥(Shift 없이) 클릭했을 때는 새 일정 추가 팝업이
+            // 뜨지 않게 함 - 수정/확인하려면 Shift+클릭으로 열어야 함
+            return;
           }
           openQuickAdd(k, null, e.currentTarget);
         });
@@ -2707,10 +2791,18 @@ function adjustRangeLaneHeights() {
           if (bottom > bottomMost) bottomMost = bottom;
         }
       });
-      const needed = bottomMost + GAP + 3;
-      td.style.setProperty('--lane-min', needed + 'px');
+      const needed = bottomMost + GAP;
+      td.style.setProperty('--lane-min', needed + 3 + 'px');
       const list = td.querySelector('.memo-list');
-      if (list) list.style.marginTop = needed + 'px';
+      if (list) {
+        // .memo-list는 (기간 막대와 달리) position:absolute가 아니라 일반 흐름(day-num 아래)에
+        // 놓이므로, marginTop을 "칸 맨 위 기준" 값(needed)을 그대로 쓰면 day-num 높이만큼
+        // 이중으로 밀려서 기간 막대끼리의 간격(GAP)보다 훨씬 벌어져 보임.
+        // day-num이 실제로 차지하는 위치(td 기준 offsetTop+높이)를 빼서 보정한다.
+        const dayNum = td.querySelector('.day-num');
+        const naturalOffset = dayNum ? (dayNum.offsetTop + dayNum.offsetHeight) : LANE_TOP0;
+        list.style.marginTop = Math.max(0, needed - naturalOffset) + 'px';
+      }
     });
   });
 }
@@ -3646,6 +3738,12 @@ document.querySelectorAll('#bgColorSwatches .swatch').forEach((btn) => {
 document.getElementById('openPicker').addEventListener('click', () => {
   try { dateNative.showPicker(); } catch (e) { dateNative.click(); }
 });
+document.getElementById('todayBtn').addEventListener('click', () => {
+  const t = new Date();
+  const todayStr = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+  dateText.value = todayStr;
+  dateNative.value = todayStr;
+});
 dateNative.addEventListener('change', () => {
   if (dateNative.value) dateText.value = dateNative.value;
 });
@@ -3780,11 +3878,8 @@ function openQuickAdd(startKey, endKey, anchorEl) {
   resetImageAttachment();
   document.getElementById('quickAddBg').classList.add('show');
   document.getElementById('memoText').focus();
-  if (anchorEl && window.innerWidth >= 1100) {
-    modalEl.style.position = 'fixed';
-    modalEl.style.margin = '0';
-    positionPopupNear(modalEl, anchorEl);
-  }
+  // 일정 추가 창은 클릭 위치 근처가 아니라 항상 화면 중앙에 뜨도록 함
+  // (제목 표시줄을 드래그하면 makeDraggable로 원하는 위치로 옮길 수 있음)
 }
 document.getElementById('quickAddClose').addEventListener('click', () => {
   document.getElementById('quickAddBg').classList.remove('show');
@@ -4396,6 +4491,11 @@ document.getElementById('calNavPrev').addEventListener('click', () => {
 });
 document.getElementById('calNavNext').addEventListener('click', () => {
   document.getElementById('nextMonth').click();
+});
+
+document.getElementById('todayJumpBtn').addEventListener('click', () => {
+  const t = new Date();
+  selectMonth(t.getFullYear(), t.getMonth(), true);
 });
 
 renderCalendar();
