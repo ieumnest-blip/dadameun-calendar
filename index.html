@@ -1753,7 +1753,7 @@
     flex-shrink: 0;
   }
   /* 이동 모드일 때: 옮기고 있는 원본 항목은 흐리게, 달력 칸들은 눌러서 고를 수 있음을 표시 */
-  .memo-preview.move-mode-source, .range-line-label.move-mode-source {
+  .memo-preview.move-mode-source, .range-line-label.move-mode-source, .range-line.move-mode-source {
     opacity: 0.4;
     outline: 2px dashed #3d8fc0;
     outline-offset: 1px;
@@ -1765,6 +1765,12 @@
   body.move-mode td:not(.empty):active {
     background: rgba(61,143,192,0.22);
   }
+  /* 눌러서 바로 끌고 있는(드래그) 중일 때, 지금 그 위에 올라온 날짜 칸을 눈에 띄게 표시 */
+  td.move-drag-hover {
+    background: rgba(61,143,192,0.3) !important;
+    box-shadow: inset 0 0 0 2px #3d8fc0;
+  }
+  body.move-mode-dragging { cursor: grabbing; }
   @keyframes moveModePop {
     from { transform: translateX(-50%) scale(0.85); opacity: 0; }
     to { transform: translateX(-50%) scale(1); opacity: 1; }
@@ -2775,7 +2781,8 @@ function buildMonthBlock(year, month) {
             // seg 변수는 이 forEach 반복이 진행되면서 계속 재사용/변경되므로, 길게 누르기가
             // 실제로 발동하는(나중) 시점에 엉뚱한 값을 읽지 않도록 지금 값을 따로 붙잡아둠.
             const segItemForMove = seg.item;
-            attachLongPressMove(label, () => ({ type: 'group', groupId: segItemForMove.groupId, start: segItemForMove.start, end: segItemForMove.end, text: segItemForMove.text }));
+            // 막대 전체(글자 부분뿐 아니라 색깔 줄 부분을 눌러도) 어디를 눌러도 옮길 수 있게 wrap에 붙임
+            attachLongPressMove(wrap, () => ({ type: 'group', groupId: segItemForMove.groupId, start: segItemForMove.start, end: segItemForMove.end, text: segItemForMove.text }));
 
             seg.startTd.appendChild(wrap);
           }
@@ -3234,35 +3241,96 @@ document.addEventListener('keydown', (e) => {
 /* 일정 항목(prow/label)에 "길게 누르기"를 붙여서, 손을 떼지 않고 있으면(500ms) 이동 모드로
    들어가게 함. 마우스(PC)와 터치(모바일) 모두 Pointer Events로 한 번에 처리.
    getPayload는 실제로 길게 눌렸을 때 호출되어 최신 상태를 반영함. */
+/* 일정을 옮기는 두 가지 방식을 모두 지원함:
+   1) 눌러서 잠깐 그대로 있으면(길게 누르기) 이동 모드로 들어가고, 그 다음에 원하는
+      날짜를 다시 눌러서 옮기는 방식 (누른 채로 움직이지 않는 경우)
+   2) 누른 채로 바로 끌어서(드래그) 원하는 날짜 칸 위에서 손을 떼는 방식
+      (누른 채로 움직이기 시작하면 자동으로 이 방식으로 전환됨) */
 function attachLongPressMove(el, getPayload) {
-  const HOLD_MS = 500;
-  const MOVE_TOLERANCE = 10;
+  const HOLD_MS = 450;
+  const MOVE_TOLERANCE = 8;
   let timer = null;
   let startX = 0, startY = 0;
-  let longPressed = false;
+  let longPressed = false; // 길게 누르기가 완료돼서, 뒤이은 click을 무시해야 하는 상태
+  let dragging = false;    // 누른 채로 실제로 끌고 있는 중
+  let activePointerId = null;
 
-  function cancelTimer() {
+  function clearHoldTimer() {
     if (timer) { clearTimeout(timer); timer = null; }
   }
 
-  el.style.touchAction = 'manipulation';
+  function findTdAt(x, y) {
+    const under = document.elementFromPoint(x, y);
+    return under ? under.closest('td[data-date]') : null;
+  }
+
+  function updateDragHover(x, y) {
+    const td = findTdAt(x, y);
+    document.querySelectorAll('.move-drag-hover').forEach((n) => { if (n !== td) n.classList.remove('move-drag-hover'); });
+    if (td) td.classList.add('move-drag-hover');
+  }
+
+  function clearDragHover() {
+    document.querySelectorAll('.move-drag-hover').forEach((n) => n.classList.remove('move-drag-hover'));
+  }
+
+  function startDragging(e) {
+    dragging = true;
+    if (!moveMode) beginMoveMode(getPayload(), el);
+    document.body.classList.add('move-mode-dragging');
+    updateDragHover(e.clientX, e.clientY);
+  }
+
+  function finishDrag(x, y) {
+    const td = findTdAt(x, y);
+    clearDragHover();
+    document.body.classList.remove('move-mode-dragging');
+    dragging = false;
+    if (td && td.dataset.date) {
+      completeMoveMode(td.dataset.date);
+    }
+    // 놓은 자리가 날짜 칸이 아니면(예: 화면 밖) 이동 모드는 유지해서, 이어서
+    // 다른 날짜를 눌러 옮길 수 있게 해둠 - 완전히 취소하려면 취소 버튼을 눌러야 함.
+  }
+
+  el.style.touchAction = 'none'; // 드래그하는 동안 화면이 같이 스크롤되지 않게 함
   el.addEventListener('pointerdown', (e) => {
     if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
     startX = e.clientX; startY = e.clientY;
     longPressed = false;
-    cancelTimer();
+    dragging = false;
+    activePointerId = e.pointerId;
+    try { el.setPointerCapture(e.pointerId); } catch (err) { /* 캡처 실패해도 나머지 로직은 그대로 동작 */ }
+    clearHoldTimer();
     timer = setTimeout(() => {
       longPressed = true;
       beginMoveMode(getPayload(), el);
     }, HOLD_MS);
   });
   el.addEventListener('pointermove', (e) => {
-    if (!timer) return;
-    if (Math.abs(e.clientX - startX) > MOVE_TOLERANCE || Math.abs(e.clientY - startY) > MOVE_TOLERANCE) cancelTimer();
+    if (activePointerId !== null && e.pointerId !== activePointerId) return;
+    if (dragging) {
+      updateDragHover(e.clientX, e.clientY);
+      return;
+    }
+    if (timer && (Math.abs(e.clientX - startX) > MOVE_TOLERANCE || Math.abs(e.clientY - startY) > MOVE_TOLERANCE)) {
+      // 누른 채로 손가락/마우스가 움직이기 시작함 = 드래그로 바로 전환
+      clearHoldTimer();
+      startDragging(e);
+    }
   });
-  el.addEventListener('pointerup', cancelTimer);
-  el.addEventListener('pointerleave', cancelTimer);
-  el.addEventListener('pointercancel', cancelTimer);
+  function onPointerUp(e) {
+    if (activePointerId !== null && e.pointerId !== activePointerId) return;
+    clearHoldTimer();
+    if (dragging) finishDrag(e.clientX, e.clientY);
+    activePointerId = null;
+  }
+  el.addEventListener('pointerup', onPointerUp);
+  el.addEventListener('pointercancel', () => {
+    clearHoldTimer();
+    if (dragging) { clearDragHover(); document.body.classList.remove('move-mode-dragging'); dragging = false; }
+    activePointerId = null;
+  });
   el.addEventListener('contextmenu', (e) => e.preventDefault());
   el.addEventListener('click', (e) => {
     if (longPressed) {
