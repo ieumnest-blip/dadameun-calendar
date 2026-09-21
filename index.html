@@ -2606,8 +2606,17 @@ function buildMonthBlock(year, month) {
             }
             // 그 날짜에 수정할 내용이 없으면 평소처럼 새 일정 추가로 진행
           } else if (previewEl) {
-            // 이미 등록된 일정을 그냥(Shift 없이) 클릭했을 때는 새 일정 추가 팝업이
-            // 뜨지 않게 함 - 수정/확인하려면 Shift+클릭으로 열어야 함
+            // 모바일(작은 화면)에는 Shift 키가 없으니, 일정을 그냥 누르면
+            // 바로 확인/수정 팝업이 뜨도록 함
+            if (window.innerWidth < 1100) {
+              if (previewEl.dataset.idx !== undefined) {
+                const dateKey = previewEl.dataset.date || k;
+                openItemPopup(dateKey, Number(previewEl.dataset.idx), previewEl);
+              }
+              return;
+            }
+            // PC에서는 이미 등록된 일정을 그냥(Shift 없이) 클릭했을 때는 새 일정 추가
+            // 팝업이 뜨지 않게 함 - 수정/확인하려면 Shift+클릭으로 열어야 함
             return;
           }
           openQuickAdd(k, null, e.currentTarget);
