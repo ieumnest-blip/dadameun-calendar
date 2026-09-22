@@ -4207,8 +4207,26 @@ function applyDragHighlight(startKey, endKey) {
     if (d >= lo && d <= hi) td.classList.add('drag-selected');
   });
 }
+function endDragSelect(openAdd) {
+  if (!dragState) return;
+  clearDragHighlight();
+  const { startKey, currentKey } = dragState;
+  dragState = null;
+  if (openAdd && dragMoved && startKey !== currentKey) {
+    const a = keyToDate(startKey), b = keyToDate(currentKey);
+    const sKey = a < b ? startKey : currentKey;
+    const eKey = a < b ? currentKey : startKey;
+    selectDate(sKey);
+    const anchorTd = document.querySelector(`td[data-date="${sKey}"]`);
+    openQuickAdd(sKey, eKey, anchorTd);
+  }
+}
 document.addEventListener('mousemove', (e) => {
   if (!dragState) return;
+  // 마우스 버튼을 뗀 채로(예: 브라우저 창 밖에서 손을 뗐다가 다시 들어온 경우) 움직이고
+  // 있다면, mouseup 이벤트를 놓친 것이므로 드래그 상태를 그냥 정리함 (날짜 칸에 파란
+  // 배경이 계속 남아있는 문제 방지).
+  if (e.buttons === 0) { endDragSelect(false); return; }
   const dk = getDateKeyFromPoint(e.clientX, e.clientY);
   if (dk && dk !== dragState.currentKey) {
     dragState.currentKey = dk;
@@ -4217,19 +4235,11 @@ document.addEventListener('mousemove', (e) => {
   }
 });
 document.addEventListener('mouseup', () => {
-  if (!dragState) return;
-  clearDragHighlight();
-  const { startKey, currentKey } = dragState;
-  dragState = null;
-  if (dragMoved && startKey !== currentKey) {
-    const a = keyToDate(startKey), b = keyToDate(currentKey);
-    const sKey = a < b ? startKey : currentKey;
-    const eKey = a < b ? currentKey : startKey;
-    selectDate(sKey);
-    const anchorTd = document.querySelector(`td[data-date="${sKey}"]`);
-    openQuickAdd(sKey, eKey, anchorTd);
-  }
+  endDragSelect(true);
 });
+// 마우스를 누른 채로 브라우저 창 밖으로 나가서 거기서 손을 떼면 mouseup이 아예
+// 감지되지 않을 수 있으므로, 창이 포커스를 잃을 때도 안전하게 정리함.
+window.addEventListener('blur', () => { endDragSelect(false); });
 
 /* 팝업 안의 "빈 공간"(입력칸/버튼/체크박스 등 조작 요소가 아닌 곳)을 아무 데나 눌러서
    드래그로 위치를 옮길 수 있게 함. 타이핑하는 칸이나 클릭해야 하는 요소는 제외. */
