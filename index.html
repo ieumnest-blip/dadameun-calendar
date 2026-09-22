@@ -2131,7 +2131,6 @@
 </div>
 
 <script>
-console.log('다담은,달력 build: 2026-09-22-simple1s (드래그 없이, 1초 꾹 누르기)');
 /* ===== Firebase 클라우드 동기화 (로그인한 사용자별로 데이터 분리) ===== */
 const firebaseConfig = {
   apiKey: "AIzaSyCbs8pGZgRcr9vncl-DsyRsl166y1245ic",
@@ -3202,25 +3201,13 @@ document.getElementById('moveModeCancelBtn').addEventListener('click', () => end
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && moveMode) endMoveMode();
 });
-// 일정을 끌던(드래그) 도중에 마우스를 창 밖에서 놓거나, 다른 창으로 포커스가
-// 넘어가버리면 pointerup/pointercancel을 놓쳐서 이동 모드(점선 테두리 + 안내 배너)가
-// 계속 남아있는 문제가 있었음. 창 포커스를 잃거나 탭이 백그라운드로 가면 안전하게
-// 정리되도록 함.
-function forceCancelAnyMove() {
-  document.body.classList.remove('move-mode-dragging');
-  document.querySelectorAll('.move-drag-hover').forEach((n) => n.classList.remove('move-drag-hover'));
-  if (moveMode) endMoveMode();
-}
-window.addEventListener('blur', forceCancelAnyMove);
-document.addEventListener('visibilitychange', () => { if (document.hidden) forceCancelAnyMove(); });
 
-/* 일정 항목(prow/label)에 "길게 누르기"를 붙여서, 손을 떼지 않고 2초간 그대로 있으면
-   이동 모드로 들어가게 함 (PC/모바일 공통, 단순한 방식으로 통일함).
-   그 전에 살짝이라도 움직이면 그냥 취소되고(스크롤/클릭과 헷갈리지 않음),
-   2초를 다 채우고 나면 안내 배너가 뜨고, 그 다음 원하는 날짜 칸을 한 번 눌러서
-   옮기면 됨. (예전엔 누른 채로 바로 끌어서 옮기는 드래그 방식도 같이 지원했었는데,
-   창 포커스를 잃거나 하는 여러 경우에 상태가 꼬이는 문제가 반복돼서, 가장 단순하고
-   확실한 "꾹 누르기 → 날짜 탭" 방식 하나로 정리함.) */
+/* 일정 항목(prow/label)에 "길게 누르기"를 붙여서, 손을 떼지 않고 1초간 그대로 있으면
+   이동 모드로 들어가게 함 (PC/모바일 공통). 그 전에 살짝이라도 움직이면 그냥 취소되고
+   (스크롤/클릭과 헷갈리지 않음), 1초를 다 채우고 나면 안내 배너가 뜨고, 그 다음 원하는
+   날짜 칸을 한 번 눌러서 옮기면 됨.
+   * 참고: 누른 채로 바로 끌어서(드래그) 옮기는 방식은 일정 이동 기능에서는 빼고,
+     "새 기간일정 만들기"(빈 칸을 드래그해서 날짜 범위를 고르는 기능)에만 그대로 남겨둠. */
 function attachLongPressMove(el, getPayload) {
   const HOLD_MS = 1000; // 꾹 눌러서 기다려야 하는 시간(1초)
   const MOVE_TOLERANCE = 8;
@@ -3249,7 +3236,7 @@ function attachLongPressMove(el, getPayload) {
     if (activePointerId !== null && e.pointerId !== activePointerId) return;
     if (!timer) return; // 이미 꾹 누르기가 끝났거나 취소된 상태면 움직임은 무시함
     const movedFar = Math.abs(e.clientX - startX) > MOVE_TOLERANCE || Math.abs(e.clientY - startY) > MOVE_TOLERANCE;
-    if (movedFar) clearHoldTimer(); // 2초 채우기 전에 움직이면(스크롤 등) 그냥 취소
+    if (movedFar) clearHoldTimer(); // 1초 채우기 전에 움직이면(스크롤 등) 그냥 취소
   });
   function onPointerUp(e) {
     if (activePointerId !== null && e.pointerId !== activePointerId) return;
@@ -4150,26 +4137,8 @@ function applyDragHighlight(startKey, endKey) {
     if (d >= lo && d <= hi) td.classList.add('drag-selected');
   });
 }
-function endDragSelect(openAdd) {
-  if (!dragState) return;
-  clearDragHighlight();
-  const { startKey, currentKey } = dragState;
-  dragState = null;
-  if (openAdd && dragMoved && startKey !== currentKey) {
-    const a = keyToDate(startKey), b = keyToDate(currentKey);
-    const sKey = a < b ? startKey : currentKey;
-    const eKey = a < b ? currentKey : startKey;
-    selectDate(sKey);
-    const anchorTd = document.querySelector(`td[data-date="${sKey}"]`);
-    openQuickAdd(sKey, eKey, anchorTd);
-  }
-}
 document.addEventListener('mousemove', (e) => {
   if (!dragState) return;
-  // 마우스 버튼을 뗀 채로(예: 브라우저 창 밖에서 손을 뗐다가 다시 들어온 경우) 움직이고
-  // 있다면, mouseup 이벤트를 놓친 것이므로 드래그 상태를 그냥 정리함 (날짜 칸에 파란
-  // 배경이 계속 남아있는 문제 방지).
-  if (e.buttons === 0) { endDragSelect(false); return; }
   const dk = getDateKeyFromPoint(e.clientX, e.clientY);
   if (dk && dk !== dragState.currentKey) {
     dragState.currentKey = dk;
@@ -4178,11 +4147,19 @@ document.addEventListener('mousemove', (e) => {
   }
 });
 document.addEventListener('mouseup', () => {
-  endDragSelect(true);
+  if (!dragState) return;
+  clearDragHighlight();
+  const { startKey, currentKey } = dragState;
+  dragState = null;
+  if (dragMoved && startKey !== currentKey) {
+    const a = keyToDate(startKey), b = keyToDate(currentKey);
+    const sKey = a < b ? startKey : currentKey;
+    const eKey = a < b ? currentKey : startKey;
+    selectDate(sKey);
+    const anchorTd = document.querySelector(`td[data-date="${sKey}"]`);
+    openQuickAdd(sKey, eKey, anchorTd);
+  }
 });
-// 마우스를 누른 채로 브라우저 창 밖으로 나가서 거기서 손을 떼면 mouseup이 아예
-// 감지되지 않을 수 있으므로, 창이 포커스를 잃을 때도 안전하게 정리함.
-window.addEventListener('blur', () => { endDragSelect(false); });
 
 /* 팝업 안의 "빈 공간"(입력칸/버튼/체크박스 등 조작 요소가 아닌 곳)을 아무 데나 눌러서
    드래그로 위치를 옮길 수 있게 함. 타이핑하는 칸이나 클릭해야 하는 요소는 제외. */
