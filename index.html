@@ -3211,7 +3211,7 @@ document.addEventListener('keydown', (e) => {
    2) 누른 채로 바로 끌어서(드래그) 원하는 날짜 칸 위에서 손을 떼는 방식
       (누른 채로 움직이기 시작하면 자동으로 이 방식으로 전환됨) */
 function attachLongPressMove(el, getPayload) {
-  const HOLD_MS = 2000; // 꾹 눌러서 기다려야 하는 시간(2초)
+  const HOLD_MS = 1000; // 꾹 눌러서 기다려야 하는 시간(1초)
   const MOVE_TOLERANCE = 8;
   let timer = null;
   let startX = 0, startY = 0;
