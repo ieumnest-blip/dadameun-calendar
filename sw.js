@@ -3,7 +3,7 @@
    - 로그인/동기화에 영향 없도록 Firebase 등 대부분의 요청은 그대로 네트워크로 보냄
    - 페이지 자체(index.html)만 "네트워크 우선, 실패하면 캐시" 방식으로 오프라인에서도 열리게 함 */
 
-const CACHE_NAME = 'dadameun-calendar-v2';
+const CACHE_NAME = 'dadameun-calendar-v1';
 const APP_SHELL = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -30,11 +30,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          // res를 돌려주기 전에 먼저(동기적으로) 복제해둬야 함. caches.open()은
-          // 비동기라서, 나중에(await 없이) res.clone()을 부르면 그 사이에 브라우저가
-          // 이미 res의 본문을 읽기 시작해 "Response body is already used" 에러가 남.
-          const resClone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', resClone)).catch(() => {});
+          caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', res.clone()));
           return res;
         })
         .catch(() => caches.match('./index.html'))
