@@ -3242,6 +3242,7 @@ function attachLongPressMove(el, getPayload) {
 
   function startDragging(e) {
     dragging = true;
+    longPressed = true; // 드래그로 이동이 시작됐으면, 놓은 자리에서 클릭이 새로 열리지 않게 함
     if (!moveMode) beginMoveMode(getPayload(), el);
     document.body.classList.add('move-mode-dragging');
     updateDragHover(e.clientX, e.clientY);
@@ -3270,11 +3271,17 @@ function attachLongPressMove(el, getPayload) {
     currentPointerType = e.pointerType || 'mouse';
     try { el.setPointerCapture(e.pointerId); } catch (err) { /* 캡처 실패해도 나머지 로직은 그대로 동작 */ }
     clearHoldTimer();
-    timer = setTimeout(() => {
-      longPressed = true;
-      holdArmed = true;
-      beginMoveMode(getPayload(), el);
-    }, HOLD_MS);
+    // PC(마우스)는 실제로 끌어야만(드래그) 이동 모드로 들어가게 함 - 그냥 마우스 버튼을
+    // 누른 채로 가만히 있다가(움직임 없이) 1초가 지나도 이동 모드가 시작되지 않도록 함.
+    // (안 그러면 클릭하려다 손을 살짝 늦게 떼는 것만으로도 점선 테두리가 남는 이상한
+    //  상태로 빠지는 문제가 있었음)
+    if (currentPointerType !== 'mouse') {
+      timer = setTimeout(() => {
+        longPressed = true;
+        holdArmed = true;
+        beginMoveMode(getPayload(), el);
+      }, HOLD_MS);
+    }
   });
   el.addEventListener('pointermove', (e) => {
     if (activePointerId !== null && e.pointerId !== activePointerId) return;
