@@ -2131,6 +2131,7 @@
 </div>
 
 <script>
+console.log('다담은,달력 build: 2026-09-22-fix3 (이동모드 멈춤 버그 추가 수정)');
 /* ===== Firebase 클라우드 동기화 (로그인한 사용자별로 데이터 분리) ===== */
 const firebaseConfig = {
   apiKey: "AIzaSyCbs8pGZgRcr9vncl-DsyRsl166y1245ic",
@@ -3201,6 +3202,17 @@ document.getElementById('moveModeCancelBtn').addEventListener('click', () => end
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && moveMode) endMoveMode();
 });
+// 일정을 끌던(드래그) 도중에 마우스를 창 밖에서 놓거나, 다른 창으로 포커스가
+// 넘어가버리면 pointerup/pointercancel을 놓쳐서 이동 모드(점선 테두리 + 안내 배너)가
+// 계속 남아있는 문제가 있었음. 창 포커스를 잃거나 탭이 백그라운드로 가면 안전하게
+// 정리되도록 함.
+function forceCancelAnyMove() {
+  document.body.classList.remove('move-mode-dragging');
+  document.querySelectorAll('.move-drag-hover').forEach((n) => n.classList.remove('move-drag-hover'));
+  if (moveMode) endMoveMode();
+}
+window.addEventListener('blur', forceCancelAnyMove);
+document.addEventListener('visibilitychange', () => { if (document.hidden) forceCancelAnyMove(); });
 
 /* 일정 항목(prow/label)에 "길게 누르기"를 붙여서, 손을 떼지 않고 있으면(500ms) 이동 모드로
    들어가게 함. 마우스(PC)와 터치(모바일) 모두 Pointer Events로 한 번에 처리.
@@ -3255,9 +3267,12 @@ function attachLongPressMove(el, getPayload) {
     dragging = false;
     if (td && td.dataset.date) {
       completeMoveMode(td.dataset.date);
+    } else {
+      // 실제로 손을 놓았는데(드래그를 끝냈는데) 날짜 칸 위가 아니면, 이동 모드를 계속
+      // 켜둔 채로 남겨두면 점선 테두리+안내 배너만 화면에 남아 "고장난 것처럼" 보이는
+      // 문제가 있었음. 드래그로 옮기다가 엉뚱한 곳에 놓으면 그냥 취소된 것으로 처리함.
+      endMoveMode();
     }
-    // 놓은 자리가 날짜 칸이 아니면(예: 화면 밖) 이동 모드는 유지해서, 이어서
-    // 다른 날짜를 눌러 옮길 수 있게 해둠 - 완전히 취소하려면 취소 버튼을 눌러야 함.
   }
 
   el.style.touchAction = 'none'; // 드래그하는 동안 화면이 같이 스크롤되지 않게 함
