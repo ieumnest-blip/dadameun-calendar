@@ -1276,6 +1276,11 @@
     color: #7fa0b0;
     font-weight: 600;
   }
+  .memo-convert-msg {
+    font-size: 13px;
+    color: #4a5b63;
+    line-height: 1.4;
+  }
   .memo-inline-editor-actions {
     display: flex;
     gap: 6px;
@@ -3044,6 +3049,22 @@ function applyMemoTitle(key, idx, newTitle) {
   refreshMemoPopup(key, idx);
 }
 
+/* 일정 <-> 할일 전환 (기간일정이면 같은 groupId를 가진 모든 날짜의 항목에 다 같이 적용) */
+function applyMemoTodoType(key, idx, makeTodo) {
+  const item = memos[key][idx];
+  if (item.groupId) {
+    Object.keys(memos).forEach((k) => {
+      memos[k].forEach((it) => { if (it.groupId === item.groupId) it.isTodo = !!makeTodo; });
+    });
+  } else {
+    item.isTodo = !!makeTodo;
+  }
+  saveMemos();
+  renderCalendar();
+  updateDdayWidget();
+  refreshMemoPopup(key, idx);
+}
+
 /* 기간(그룹) 하나를 새 시작~종료일로 통째로 옮김 (내용/색상 등은 그대로 유지) */
 function moveRangeGroup(groupId, newStartKey, newEndKey) {
   let rep = null;
@@ -3539,6 +3560,41 @@ function buildMemoItemCard(key, idx, refreshFn) {
 
   actions.appendChild(makeInlineTextEditor('내용수정', item.text, true, (val) => applyMemoContent(key, idx, val)));
   actions.appendChild(makeInlineTextEditor('제목수정', item.title || '', false, (val) => applyMemoTitle(key, idx, val)));
+
+  const convertBtn = document.createElement('button');
+  convertBtn.type = 'button';
+  convertBtn.textContent = '전환';
+  convertBtn.title = '일정 ↔ 할일 전환';
+  convertBtn.addEventListener('click', () => {
+    const existing = div.querySelector('.memo-inline-editor-전환');
+    if (existing) { existing.remove(); return; }
+    closeInlineExtras();
+    const wrap = document.createElement('div');
+    wrap.className = 'memo-inline-editor memo-inline-editor-전환';
+    const msg = document.createElement('div');
+    msg.className = 'memo-convert-msg';
+    msg.textContent = item.isTodo
+      ? '지금 "할일"로 등록되어 있어요. "일정"으로 바꿀까요?'
+      : '지금 "일정"으로 등록되어 있어요. "할일"로 바꿀까요?';
+    wrap.appendChild(msg);
+    const actionsRow = document.createElement('div');
+    actionsRow.className = 'memo-inline-editor-actions';
+    const confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.className = 'btn-inline-save';
+    confirmBtn.textContent = item.isTodo ? '일정으로 바꾸기' : '할일로 바꾸기';
+    confirmBtn.addEventListener('click', () => applyMemoTodoType(key, idx, !item.isTodo));
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn-inline-cancel';
+    cancelBtn.textContent = '취소';
+    cancelBtn.addEventListener('click', () => wrap.remove());
+    actionsRow.appendChild(confirmBtn);
+    actionsRow.appendChild(cancelBtn);
+    wrap.appendChild(actionsRow);
+    div.appendChild(wrap);
+  });
+  actions.appendChild(convertBtn);
 
   if (item.groupId) {
     const editPeriodBtn = document.createElement('button');
