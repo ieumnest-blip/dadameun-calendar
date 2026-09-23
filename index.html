@@ -4697,21 +4697,6 @@ document.addEventListener('keydown', (e) => {
   });
 });
 
-/* Alt + 방향키로 계정(졸린곰/고민곰) 전환 */
-document.addEventListener('keydown', (e) => {
-  if (!e.altKey) return;
-  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-  const cards = Array.from(document.querySelectorAll('.acc-card'));
-  if (cards.length < 2) return;
-  const curIdx = cards.findIndex((c) => c.dataset.acc === currentAccount);
-  if (curIdx === -1) return;
-  const nextIdx = e.key === 'ArrowRight'
-    ? (curIdx + 1) % cards.length
-    : (curIdx - 1 + cards.length) % cards.length;
-  e.preventDefault();
-  switchAccount(cards[nextIdx].dataset.acc);
-});
-
 /* ===== 계정 전환 ===== */
 function updateAccountButtons() {
   document.querySelectorAll('.acc-card').forEach((btn) => {
