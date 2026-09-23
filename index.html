@@ -692,19 +692,26 @@
   }
   .memo-preview.todo-preview {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 4px;
     white-space: normal;
   }
   .memo-preview.todo-preview input[type="checkbox"] {
     width: 13px; height: 13px;
     flex-shrink: 0;
+    margin-top: 2px;
     accent-color: #3d8fc0;
     cursor: pointer;
   }
   .memo-preview.todo-preview span {
     overflow: visible;
     text-overflow: unset;
+    /* 체크박스 옆 글자 칸이 flex 아이템이라, min-width를 0으로 안 열어주면
+       칸(td) 너비를 넘어가도 줄바꿈되지 않고 옆 날짜 칸 위로 삐져나가는 문제가 있었음 */
+    min-width: 0;
+    flex: 1 1 auto;
+    word-break: keep-all;
+    overflow-wrap: break-word;
   }
   .memo-item-todo-row {
     display: flex;
