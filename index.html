@@ -2239,17 +2239,38 @@ function applyCloudData(cloudData) {
 }
 
 let pushTimer = null;
+function doPushToCloudNow() {
+  if (!cloudDocRef) return;
+  cloudDocRef.set({
+    data: collectLocalData(),
+    updatedAt: Date.now(),
+    updatedBy: CLIENT_ID
+  }).catch((e) => console.warn('클라우드 저장 실패', e));
+}
 function pushToCloud() {
   if (!cloudDocRef) return;
   clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
-    cloudDocRef.set({
-      data: collectLocalData(),
-      updatedAt: Date.now(),
-      updatedBy: CLIENT_ID
-    }).catch((e) => console.warn('클라우드 저장 실패', e));
+    pushTimer = null;
+    doPushToCloudNow();
   }, 800);
 }
+/* 모바일에서는 일정을 추가하자마자 바로 화면을 끄거나 다른 앱으로 넘어가는 경우가 많은데,
+   그 순간 위 800ms 지연 타이머가 아직 안 끝난 상태라서 브라우저가 백그라운드로 가면서
+   타이머가 실행되지 못하고 클라우드 저장이 통째로 날아가는 문제가 있었음.
+   화면이 가려지는(visibilitychange) 또는 페이지를 떠나는(pagehide) 순간에
+   대기 중인 저장을 즉시 실행해서 이 문제를 막음. */
+function flushPendingCloudPush() {
+  if (pushTimer) {
+    clearTimeout(pushTimer);
+    pushTimer = null;
+    doPushToCloudNow();
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushPendingCloudPush();
+});
+window.addEventListener('pagehide', flushPendingCloudPush);
 
 /* 로그인한 사용자(uid)의 문서와 동기화를 시작. 로그인 성공 후 한 번만 호출됨 */
 function startCloudSyncForUser(uid) {
