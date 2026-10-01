@@ -22,6 +22,11 @@
   html {
     color-scheme: light only;
   }
+  /* 입력칸/메모칸처럼 "편집 가능한" 요소는 브라우저가 따로 더 적극적으로
+     다크모드를 입히는 경우가 있어서, 이런 요소들에도 개별적으로 라이트 고정을 걸어줌 */
+  input, textarea, select, [contenteditable="true"], [contenteditable=""] {
+    color-scheme: light only;
+  }
   html, body {
     margin: 0; padding: 0;
     font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
@@ -1576,6 +1581,7 @@
     overflow-y: auto;
     outline: none;
     font-size: 14px;
+    background: #fff;
     color: #33505f;
     line-height: 1.5;
     word-break: break-word;
