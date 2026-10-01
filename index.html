@@ -2238,14 +2238,27 @@ function applyCloudData(cloudData) {
   });
 }
 
+/* 마지막으로 "이 기기에 반영된" 클라우드 데이터의 시각(updatedAt)을 기억해둠.
+   모바일이 백그라운드에 있는 동안 받은 실시간 업데이트(onSnapshot)를 놓쳤을 때,
+   다시 화면으로 돌아왔을 때 이 값과 클라우드의 최신 값을 비교해서 "놓친 변경"이
+   있었는지 확인하는 데 씀. */
+function recordAppliedUpdate(ts) {
+  try { localStorage.setItem('dadameunLastAppliedUpdate', String(ts || 0)); } catch (e) {}
+}
+function getLastAppliedUpdate() {
+  return Number(localStorage.getItem('dadameunLastAppliedUpdate') || 0);
+}
+
 let pushTimer = null;
 function doPushToCloudNow() {
   if (!cloudDocRef) return;
+  const ts = Date.now();
   cloudDocRef.set({
     data: collectLocalData(),
-    updatedAt: Date.now(),
+    updatedAt: ts,
     updatedBy: CLIENT_ID
-  }).catch((e) => console.warn('클라우드 저장 실패', e));
+  }).then(() => recordAppliedUpdate(ts))
+    .catch((e) => console.warn('클라우드 저장 실패', e));
 }
 function pushToCloud() {
   if (!cloudDocRef) return;
@@ -2271,6 +2284,24 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') flushPendingCloudPush();
 });
 window.addEventListener('pagehide', flushPendingCloudPush);
+/* 모바일에서는 화면이 꺼지거나 다른 앱으로 넘어가 있는 동안, 배터리 절약을 위해
+   브라우저가 실시간 동기화(onSnapshot) 연결 자체를 끊어버리는 경우가 있어서
+   "다른 기기에서 바뀐 내용"을 못 받고 놓칠 수 있음. 그래서 화면을 다시 켜고
+   돌아올 때마다 클라우드에 직접 한 번 더 물어봐서, 놓친 변경이 있으면 반영함. */
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (!cloudDocRef) return;
+  cloudDocRef.get().then((snap) => {
+    if (!snap.exists) return;
+    const remote = snap.data();
+    if (remote.updatedBy === CLIENT_ID) return;
+    if ((remote.updatedAt || 0) > getLastAppliedUpdate()) {
+      applyCloudData(remote.data);
+      recordAppliedUpdate(remote.updatedAt);
+      location.reload();
+    }
+  }).catch((e) => console.warn('클라우드 재확인 실패', e));
+});
 
 /* 로그인한 사용자(uid)의 문서와 동기화를 시작. 로그인 성공 후 한 번만 호출됨 */
 function startCloudSyncForUser(uid) {
@@ -2292,6 +2323,7 @@ function startCloudSyncForUser(uid) {
       const remote = snap.data();
       if (remote.updatedBy === CLIENT_ID) return; // 내가 방금 쓴 변경은 무시
       applyCloudData(remote.data);
+      recordAppliedUpdate(remote.updatedAt);
       location.reload();
     });
     return;
@@ -2304,6 +2336,7 @@ function startCloudSyncForUser(uid) {
       if (remote.updatedBy !== CLIENT_ID) {
         applyCloudData(remote.data);
       }
+      recordAppliedUpdate(remote.updatedAt);
     }
   }).catch((e) => {
     console.warn('클라우드 불러오기 실패', e);
