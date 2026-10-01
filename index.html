@@ -3135,6 +3135,13 @@ document.getElementById('calendarWrap').addEventListener('scroll', () => {
     hScrollTicking = true;
   }
 }, { passive: true });
+/* 모바일에서는 손가락을 뗀 뒤에도 스냅 애니메이션이 잠깐 더 움직이는데, 그 와중에
+   scroll 이벤트가 중간에 끊겨버려서 "경계용 칸(작년 12월/내년 1월)까지 왔다"는 걸
+   놓치는 경우가 있었음 (그래서 12월→내년 1월로 안 넘어가지는 문제).
+   손가락을 뗀 직후 스냅이 다 끝날 시점에 한 번 더 확실히 확인해줌. */
+document.getElementById('calendarWrap').addEventListener('touchend', () => {
+  window.setTimeout(onHorizontalScroll, 400);
+}, { passive: true });
 
 function deleteRangeGroup(groupId) {
   Object.keys(memos).forEach((k) => {
