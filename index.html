@@ -515,6 +515,10 @@
   .month-block {
     flex: 0 0 100%;
     scroll-snap-align: start;
+    /* 빠르게 휙 밀었을 때 스크롤 관성 때문에 한 번에 두 달씩 넘어가버리는 문제를 막음:
+       "always"를 주면 브라우저가 휙 스크롤 중에도 다음 달 지점에서 반드시 한 번 멈추고,
+       그다음 또 한 번 밀어야만 그다음 달로 넘어가게 강제함. */
+    scroll-snap-stop: always;
     background: #fff;
     border-radius: 18px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.06);
