@@ -2372,6 +2372,7 @@ function saveFreeMemo() {
   const box = document.getElementById('freeMemoBox');
   if (!box) return;
   localStorage.setItem(freeMemoKeyFor(currentAccount), box.innerHTML);
+  pushToCloud(); // 메모 내용도 일정처럼 클라우드로 올려야 다른 기기에서도 똑같이 보임
 }
 loadFreeMemo(currentAccount);
 document.getElementById('freeMemoBox')?.addEventListener('input', saveFreeMemo);
