@@ -1470,6 +1470,22 @@
     white-space: pre-line;
   }
 
+  /* 오늘/내일/모레 각각을 원래의 "오늘의 일정" 카드와 똑같은 모양으로 복제해서
+     확실히 구분되는 별도의 흰색 카드로 보여줌 */
+  .agenda-day-card {
+    background: #fff;
+    border: 1px solid #dbe4ea;
+    border-top: 3px solid #3d8fc0;
+    border-radius: 16px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .agenda-day-card:last-child { margin-bottom: 0; }
+  .agenda-day-card--tomorrow { border-top-color: #4caf82; }
+  .agenda-day-card--dayafter { border-top-color: #e0a23d; }
+  .agenda-day-card-title { margin-bottom: 4px; }
+  .agenda-day-card .empty-memo { padding: 6px 2px; text-align: left; }
+
   /* ===== 자유 메모 패널 (사진 붙여넣기 지원) ===== */
   .memo-panel {
     background: #fff;
@@ -1500,6 +1516,13 @@
       top: 22px;
       width: 300px;
     }
+  }
+  /* 오늘/내일/모레 카드를 담는 바깥 패널 자체는 테두리 없이 투명하게 두고,
+     각 날짜 카드(.agenda-day-card)가 원래의 "오늘의 일정" 카드 모양을 그대로 가짐 */
+  .memo-panel.memo-panel--cards {
+    background: transparent;
+    border: none;
+    padding: 0;
   }
   .memo-panel-title {
     font-size: 13px;
@@ -1938,8 +1961,7 @@
   </div>
 </header>
 
-<div class="memo-panel" id="memoPanel">
-  <div class="memo-panel-title">📋 오늘의 일정</div>
+<div class="memo-panel memo-panel--cards" id="memoPanel">
   <div id="todayAgenda"></div>
 </div>
 
@@ -4950,30 +4972,75 @@ function renderAgendaInto(dateKey, boxId, emptyText) {
 
 let selectedDateKey = null;
 
+const AGENDA_WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
+/* 오늘의 일정 카드와 똑같은 모양(흰 카드 + 제목 + 일정 목록)을 그대로 복제해서
+   하나씩 만들어준다. cardModifier로 내일/모레 카드를 테두리 색으로 구분함. */
+function addAgendaDayCard(container, dateKey, titleText, holderId, emptyText, cardModifier) {
+  const card = document.createElement('div');
+  card.className = 'agenda-day-card' + (cardModifier ? ' agenda-day-card--' + cardModifier : '');
+
+  const title = document.createElement('div');
+  title.className = 'memo-panel-title agenda-day-card-title';
+  title.textContent = titleText;
+  card.appendChild(title);
+
+  const holder = document.createElement('div');
+  holder.id = holderId;
+  card.appendChild(holder);
+
+  container.appendChild(card);
+  // renderAgendaInto가 getElementById로 holder를 찾으므로, 반드시 container에 붙인 뒤에 호출
+  renderAgendaInto(dateKey, holderId, emptyText);
+}
+
+/* 오늘/내일/모레 3일치 카드는 모바일(= PC용 고정 사이드 패널 레이아웃이 아닌 화면)에서만 보여주고,
+   PC(가로 1100px 이상, 고정 사이드 패널 레이아웃)에서는 원래처럼 "오늘의 일정" 하나만 보여준다. */
+const agendaDesktopMql = window.matchMedia('(min-width: 1100px)');
+function isAgendaDesktopLayout() { return agendaDesktopMql.matches; }
+
+/* 오늘 기준 보기일 때는 (모바일에서만) 오늘/내일/모레 3일치 카드를 각각 따로 보여주고,
+   달력에서 다른 날짜를 직접 클릭했을 땐 그 날짜 카드 하나만 보여준다. */
 function renderSelectedAgenda() {
   const todayKey = keyOf(today.getFullYear(), today.getMonth(), today.getDate());
   const key = selectedDateKey || todayKey;
-  const title = document.querySelector('#memoPanel .memo-panel-title');
-  if (key === todayKey) {
-    title.textContent = '📋 오늘의 일정';
-  } else {
-    const [y, m, d] = key.split('-').map(Number);
-    title.textContent = `📋 ${m}월 ${d}일의 일정`;
-  }
-  renderAgendaInto(key, 'todayAgenda', '등록된 일정이 없어요.');
-}
+  const box = document.getElementById('todayAgenda');
+  box.innerHTML = '';
 
-function renderTomorrowAgenda() {
-  const t = new Date(today);
-  t.setDate(t.getDate() + 1);
-  const tomorrowKey = keyOf(t.getFullYear(), t.getMonth(), t.getDate());
-  renderAgendaInto(tomorrowKey, 'tomorrowAgenda', '내일 등록된 일정이 없어요.');
+  if (key !== todayKey) {
+    const [y, m, d] = key.split('-').map(Number);
+    addAgendaDayCard(box, key, `📋 ${m}월 ${d}일의 일정`, 'agendaDay0', '등록된 일정이 없어요.', null);
+    return;
+  }
+
+  if (isAgendaDesktopLayout()) {
+    // PC는 원래 그대로: 오늘 일정 카드 하나만
+    addAgendaDayCard(box, todayKey, '📋 오늘의 일정', 'agendaDay0', '등록된 일정이 없어요.', null);
+    return;
+  }
+
+  const labels = ['오늘의 일정', '내일의 일정', '모레의 일정'];
+  const shortLabels = ['오늘', '내일', '모레'];
+  const modifiers = [null, 'tomorrow', 'dayafter'];
+  for (let i = 0; i < 3; i++) {
+    const t = new Date(today);
+    t.setDate(t.getDate() + i);
+    const dKey = keyOf(t.getFullYear(), t.getMonth(), t.getDate());
+    const w = AGENDA_WEEKDAYS[t.getDay()];
+    const titleText = `📋 ${labels[i]} · ${t.getMonth() + 1}월 ${t.getDate()}일(${w})`;
+    addAgendaDayCard(box, dKey, titleText, `agendaDay${i}`, `${shortLabels[i]} 등록된 일정이 없어요.`, modifiers[i]);
+  }
 }
 
 function selectDate(dateKey) {
   selectedDateKey = dateKey;
   renderSelectedAgenda();
 }
+
+// 브라우저 창 크기가 모바일⇄PC 기준선(1100px)을 넘나들 때도 바로 반영되게 함
+(agendaDesktopMql.addEventListener
+  ? agendaDesktopMql.addEventListener('change', renderSelectedAgenda)
+  : agendaDesktopMql.addListener(renderSelectedAgenda));
 
 /* ===== 알람 체크 (탭이 열려있는 동안, 30초마다 오늘 날짜의 알람 시간을 확인) ===== */
 const alarmQueue = [];
