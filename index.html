@@ -1988,6 +1988,10 @@
     <div class="memo-freebox-title">📝 메모</div>
     <div class="memo-box" id="freeMemoBox" contenteditable="true" data-placeholder="메모를 입력하세요..."></div>
   </div>
+  <div class="memo-freebox-wrap" id="quoteMemoWrap" style="display:none;">
+    <div class="memo-freebox-title">📑 견적서 &amp; 제안서</div>
+    <div class="memo-box" id="quoteMemoBox" contenteditable="true" data-placeholder="견적서 및 제안서 내용을 입력하세요..."></div>
+  </div>
 </div>
 
 <main>
@@ -2440,6 +2444,7 @@ try {
 const ACTIVE_ACCOUNT_KEY = 'yearlyCalendarActiveAccount';
 function storageKeyFor(acc) { return 'yearlyCalendarMemos_acc' + acc; }
 function freeMemoKeyFor(acc) { return 'yearlyCalendarFreeMemo_acc' + acc; }
+function quoteMemoKeyFor(acc) { return 'yearlyCalendarQuoteMemo_acc' + acc; }
 let currentAccount = localStorage.getItem(ACTIVE_ACCOUNT_KEY) || '1';
 let memos = loadMemosFor(currentAccount);
 
@@ -2454,25 +2459,54 @@ function saveFreeMemo() {
   localStorage.setItem(freeMemoKeyFor(currentAccount), box.innerHTML);
   pushToCloud(); // 메모 내용도 일정처럼 클라우드로 올려야 다른 기기에서도 똑같이 보임
 }
-loadFreeMemo(currentAccount);
-document.getElementById('freeMemoBox')?.addEventListener('input', saveFreeMemo);
-document.getElementById('freeMemoBox')?.addEventListener('paste', (e) => {
-  const items = e.clipboardData && e.clipboardData.items;
-  if (!items) return;
-  for (const it of items) {
-    if (it.type.startsWith('image/')) {
-      e.preventDefault();
-      const file = it.getAsFile();
-      const reader = new FileReader();
-      reader.onload = () => {
-        document.execCommand('insertImage', false, reader.result);
-        saveFreeMemo();
-      };
-      reader.readAsDataURL(file);
-      return;
+
+/* 고민곰(계정2) 전용 "견적서 & 제안서" 박스 - 메모 박스와 똑같이 동작하되 저장 키만 분리 */
+function loadQuoteMemo(acc) {
+  const box = document.getElementById('quoteMemoBox');
+  if (!box) return;
+  box.innerHTML = localStorage.getItem(quoteMemoKeyFor(acc)) || '';
+}
+function saveQuoteMemo() {
+  const box = document.getElementById('quoteMemoBox');
+  if (!box) return;
+  localStorage.setItem(quoteMemoKeyFor(currentAccount), box.innerHTML);
+  pushToCloud();
+}
+// 졸린곰(계정1)은 기존처럼 메모 박스 하나만, 고민곰(계정2)은 견적서&제안서 박스를 추가로 보여줌
+function updateQuoteMemoVisibility(acc) {
+  const wrap = document.getElementById('quoteMemoWrap');
+  if (!wrap) return;
+  wrap.style.display = (acc === '2') ? 'flex' : 'none';
+}
+
+function attachMemoBoxHandlers(boxId, saveFn) {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  box.addEventListener('input', saveFn);
+  box.addEventListener('paste', (e) => {
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (const it of items) {
+      if (it.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = it.getAsFile();
+        const reader = new FileReader();
+        reader.onload = () => {
+          document.execCommand('insertImage', false, reader.result);
+          saveFn();
+        };
+        reader.readAsDataURL(file);
+        return;
+      }
     }
-  }
-});
+  });
+}
+
+loadFreeMemo(currentAccount);
+loadQuoteMemo(currentAccount);
+updateQuoteMemoVisibility(currentAccount);
+attachMemoBoxHandlers('freeMemoBox', saveFreeMemo);
+attachMemoBoxHandlers('quoteMemoBox', saveQuoteMemo);
 
 /* 일정 순서(위/아래, 기간 막대 쌓임 순서)를 사용자가 임의로 바꿀 수 있도록
    각 항목에 order(숫자, 작을수록 위/먼저) 값을 부여해서 관리함.
@@ -4857,6 +4891,8 @@ function switchAccount(acc) {
   pushToCloud();
   memos = loadMemosFor(acc);
   loadFreeMemo(acc);
+  loadQuoteMemo(acc);
+  updateQuoteMemoVisibility(acc);
   updateAccountButtons();
   document.getElementById('modalBg').classList.remove('show');
   updateDdayWidget();
