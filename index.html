@@ -2449,10 +2449,25 @@ document.addEventListener('visibilitychange', () => {
     if ((remote.updatedAt || 0) > getLastAppliedUpdate()) {
       applyCloudData(remote.data);
       recordAppliedUpdate(remote.updatedAt);
-      location.reload();
+      reloadForRemoteChange();
     }
   }).catch((e) => console.warn('클라우드 재확인 실패', e));
 });
+
+/* 다른 기기에서 바뀐 내용을 받으면 새로고침해서 반영하는데, 알람 창이 떠 있는 중이면
+   (예: PC와 폰에서 같은 알람이 동시에 울림) 알람 창이 사라지지 않게 "확인"을 누를 때까지 기다림.
+   기다리는 동안에도 화면이 들고 있는 일정은 방금 받은 최신 내용으로 바꿔둬서,
+   그 사이에 저장이 일어나도 다른 기기에서 바뀐 내용을 덮어쓰지 않게 함. */
+let reloadPendingAfterAlarm = false;
+function reloadForRemoteChange() {
+  const ov = document.getElementById('alarmOverlay');
+  if (ov && ov.classList.contains('show')) {
+    reloadPendingAfterAlarm = true;
+    try { memos = loadMemosFor(currentAccount); } catch (e) { /* 무시 */ }
+    return;
+  }
+  location.reload();
+}
 
 /* 로그인한 사용자(uid)의 문서와 동기화를 시작. 로그인 성공 후 한 번만 호출됨 */
 function startCloudSyncForUser(uid) {
@@ -2475,7 +2490,7 @@ function startCloudSyncForUser(uid) {
       if (remote.updatedBy === CLIENT_ID) return; // 내가 방금 쓴 변경은 무시
       applyCloudData(remote.data);
       recordAppliedUpdate(remote.updatedAt);
-      location.reload();
+      reloadForRemoteChange();
     });
     return;
   }
@@ -3354,6 +3369,38 @@ function applyMemoTitle(key, idx, newTitle) {
 }
 
 /* 일정 <-> 할일 전환 (기간일정이면 같은 groupId를 가진 모든 날짜의 항목에 다 같이 적용) */
+/* 이미 등록된 일정의 알람을 새로 켜거나, 시간을 바꾸거나, 끔 (newTime이 null이면 알람 끄기).
+   기간 일정/반복 일정은 등록할 때처럼 같은 묶음의 모든 날짜에 똑같이 적용함.
+   시간을 바꾸면 "이미 울렸음" 표시도 지워서 새 시간에 다시 울리게 함. */
+function applyMemoAlarm(key, idx, newTime) {
+  const item = memos[key] && memos[key][idx];
+  if (!item) return;
+  const setAlarm = (it) => {
+    if (newTime) {
+      if (it.alarmTime !== newTime) it.alarmFired = false;
+      it.alarmTime = newTime;
+    } else {
+      it.alarmTime = null;
+      it.alarmFired = false;
+    }
+  };
+  if (item.groupId || item.repeatId) {
+    Object.keys(memos).forEach((k) => {
+      memos[k].forEach((it) => {
+        if ((item.groupId && it.groupId === item.groupId) || (item.repeatId && it.repeatId === item.repeatId)) setAlarm(it);
+      });
+    });
+  } else {
+    setAlarm(item);
+  }
+  saveMemos();
+  renderCalendar();
+  updateDdayWidget();
+  refreshMemoPopup(key, idx);
+  // 지금 바로 울려야 하는 시간이면(예: 이미 지난 시간으로 설정) 바로 확인
+  if (typeof checkAlarms === 'function' && (!DESKTOP || IS_WIDGET || DESKTOP.alarmHost)) checkAlarms();
+}
+
 function applyMemoTodoType(key, idx, makeTodo) {
   const item = memos[key][idx];
   if (item.groupId) {
@@ -3906,6 +3953,61 @@ function buildMemoItemCard(key, idx, refreshFn) {
     div.appendChild(wrap);
   });
   actions.appendChild(convertBtn);
+
+  // ⏰ 알람: 기존 일정에 알람 켜기 / 시간 바꾸기 / 끄기
+  const alarmBtn = document.createElement('button');
+  alarmBtn.type = 'button';
+  alarmBtn.textContent = item.alarmTime ? '⏰ ' + item.alarmTime : '⏰ 알람';
+  alarmBtn.title = item.alarmTime ? '알람 시간 바꾸기 / 끄기' : '이 일정에 알람 추가';
+  alarmBtn.addEventListener('click', () => {
+    const existing = div.querySelector('.memo-inline-editor-알람');
+    if (existing) { existing.remove(); return; }
+    closeInlineExtras();
+    const wrap = document.createElement('div');
+    wrap.className = 'memo-inline-editor memo-inline-editor-알람';
+    const msg = document.createElement('div');
+    msg.className = 'memo-convert-msg';
+    msg.textContent = item.alarmTime
+      ? `지금 ${item.alarmTime}에 알람이 맞춰져 있어요. 시간을 바꾸거나 끌 수 있어요.`
+      : '몇 시에 알람을 울릴까요?';
+    if (item.groupId || item.repeatId) msg.textContent += (item.groupId ? ' (기간의 모든 날짜에 적용돼요)' : ' (반복되는 모든 날짜에 적용돼요)');
+    wrap.appendChild(msg);
+    const field = document.createElement('input');
+    field.type = 'time';
+    field.className = 'memo-inline-editor-field';
+    field.value = item.alarmTime || '';
+    wrap.appendChild(field);
+    const actionsRow = document.createElement('div');
+    actionsRow.className = 'memo-inline-editor-actions';
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn-inline-save';
+    saveBtn.textContent = item.alarmTime ? '시간 바꾸기' : '알람 켜기';
+    saveBtn.addEventListener('click', () => {
+      const t = normalizeAlarmTime(field.value);
+      if (!t) { alert('알람 시간을 골라주세요.'); return; }
+      applyMemoAlarm(key, idx, t);
+    });
+    actionsRow.appendChild(saveBtn);
+    if (item.alarmTime) {
+      const offBtn = document.createElement('button');
+      offBtn.type = 'button';
+      offBtn.className = 'btn-inline-cancel';
+      offBtn.textContent = '알람 끄기';
+      offBtn.addEventListener('click', () => applyMemoAlarm(key, idx, null));
+      actionsRow.appendChild(offBtn);
+    }
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn-inline-cancel';
+    cancelBtn.textContent = '취소';
+    cancelBtn.addEventListener('click', () => wrap.remove());
+    actionsRow.appendChild(cancelBtn);
+    wrap.appendChild(actionsRow);
+    div.appendChild(wrap);
+    field.focus();
+  });
+  actions.appendChild(alarmBtn);
 
   if (item.groupId) {
     const editPeriodBtn = document.createElement('button');
@@ -5325,16 +5427,44 @@ document.getElementById('alarmOverlayClose').addEventListener('click', () => {
   document.getElementById('alarmOverlay').classList.remove('show');
   alarmShowing = false;
   showNextAlarm();
+  if (!alarmShowing && reloadPendingAfterAlarm) location.reload();
 });
 
 /* 지금 보고 있는 계정(탭)뿐 아니라 졸린곰/고민곰 두 계정의 알람을 모두 확인함
    (예전에는 지금 열어둔 탭의 알람만 울렸음) */
 const ALARM_ACCOUNTS = { '1': '💤 졸린곰', '2': '💭 고민곰' };
+
+/* "이 기기에서 이미 울린 알람" 기록 - 기기마다 따로 보관하고 클라우드로는 올리지 않음
+   (이름이 yearlyCalendar로 시작하지 않아서 동기화 대상이 아님).
+   예전에는 한 기기에서 울리면 "울렸음"이 동기화돼서 다른 기기에서는 안 울렸는데,
+   이제는 PC와 폰이 둘 다 켜져 있으면 둘 다 울림. */
+const ALARM_RANG_KEY = 'dadameunAlarmRang';
+function loadAlarmRang(dayKey) {
+  try {
+    const o = JSON.parse(localStorage.getItem(ALARM_RANG_KEY) || '{}');
+    if (o.day === dayKey && o.rang) return o;
+  } catch (e) { /* 무시 */ }
+  return { day: dayKey, rang: {} }; // 날짜가 바뀌면 새로 시작
+}
+function saveAlarmRang(o) {
+  try { localStorage.setItem(ALARM_RANG_KEY, JSON.stringify(o)); } catch (e) { /* 무시 */ }
+}
+function alarmItemId(acc, it) {
+  return [acc, it.alarmTime, it.order || 0, it.groupId || '', it.text || ''].join('|');
+}
+function hmToMinutes(hm) {
+  const [h, m] = String(hm).split(':').map(Number);
+  return h * 60 + m;
+}
+
 function checkAlarms() {
   const now = new Date();
   const k = keyOf(now.getFullYear(), now.getMonth(), now.getDate());
   const nowHM = pad(now.getHours()) + ':' + pad(now.getMinutes());
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const rangLog = loadAlarmRang(k);
   let anyFired = false;
+  let rangChanged = false;
   Object.keys(ALARM_ACCOUNTS).forEach((acc) => {
     const isCurrent = acc === currentAccount;
     // 지금 탭은 화면에 떠 있는 데이터(memos)를, 다른 탭은 저장된 데이터를 읽어서 확인
@@ -5343,19 +5473,29 @@ function checkAlarms() {
     if (!items || items.length === 0) return;
     let changed = false;
     items.forEach((it) => {
-      if (it.alarmTime && !it.alarmFired && it.alarmTime <= nowHM) {
+      if (!it.alarmTime || it.alarmTime > nowHM) return;
+      const id = alarmItemId(acc, it);
+      if (rangLog.rang[id]) return; // 이 기기에서는 이미 울림
+      // 아직 아무 기기에서도 안 울린 알람이면(컴퓨터가 꺼져 있었던 경우 등) 늦게라도 울림.
+      // 다른 기기에서 이미 울린 알람이면, 거의 같은 때(10분 이내)일 때만 여기서도 울림
+      // → 저녁에 폰을 열었을 때 아침에 PC에서 울렸던 알람들이 한꺼번에 또 울리지 않게.
+      const recent = nowMin - hmToMinutes(it.alarmTime) <= 10;
+      rangLog.rang[id] = true;
+      rangChanged = true;
+      if (it.alarmFired && !recent) return;
+      if (!it.alarmFired) {
         it.alarmFired = true;
         changed = true;
-        const accLabel = isCurrent ? '' : ALARM_ACCOUNTS[acc];
-        alarmQueue.push({ dateKey: k, timeStr: it.alarmTime, text: it.text, accLabel });
-        // PC 앱은 앱 쪽에서 윈도우 알림을 보내므로, 브라우저 알림은 웹에서만
-        if (!DESKTOP && window.Notification && Notification.permission === 'granted') {
-          try { new Notification('⏰ ' + (accLabel ? accLabel + ' · ' : '') + it.text, { body: k + ' ' + it.alarmTime }); } catch (e) { /* 무시 */ }
-        }
+      }
+      const accLabel = isCurrent ? '' : ALARM_ACCOUNTS[acc];
+      alarmQueue.push({ dateKey: k, timeStr: it.alarmTime, text: it.text, accLabel });
+      anyFired = true;
+      // PC 앱은 앱 쪽에서 윈도우 알림을 보내므로, 브라우저 알림은 웹에서만
+      if (!DESKTOP && window.Notification && Notification.permission === 'granted') {
+        try { new Notification('⏰ ' + (accLabel ? accLabel + ' · ' : '') + it.text, { body: k + ' ' + it.alarmTime }); } catch (e) { /* 무시 */ }
       }
     });
     if (changed) {
-      anyFired = true;
       if (isCurrent) {
         saveMemos();
       } else {
@@ -5364,15 +5504,27 @@ function checkAlarms() {
       }
     }
   });
+  if (rangChanged) saveAlarmRang(rangLog);
   if (anyFired) {
     renderCalendar();
     showNextAlarm();
   }
 }
 /* PC 앱 안에서는 알람이 두 번 울리지 않도록, 앱이 "알람 담당"으로 정해준 창(alarmHost)이나
-   위젯 창에서만 알람을 확인함. 웹/모바일은 기존과 동일. */
+   위젯 창에서만 알람을 확인함. 웹/모바일은 기존과 동일.
+   알람은 "몇 시 몇 분" 단위라서, 매 분 정각(00초)에 맞춰 확인해서 그 시각이 되자마자 바로 울림.
+   (혹시 컴퓨터가 잠깐 바빠서 정각 확인이 밀려도 놓치지 않도록 15초마다 한 번씩 더 확인) */
 if (!DESKTOP || IS_WIDGET || DESKTOP.alarmHost) {
-  setInterval(checkAlarms, 30000);
+  const scheduleMinuteTick = () => {
+    const n = new Date();
+    const msToNextMinute = 60000 - (n.getSeconds() * 1000 + n.getMilliseconds()) + 150;
+    setTimeout(() => { checkAlarms(); scheduleMinuteTick(); }, msToNextMinute);
+  };
+  scheduleMinuteTick();
+  setInterval(checkAlarms, 15000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkAlarms();
+  });
   checkAlarms();
 }
 updateDdayWidget();
