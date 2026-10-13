@@ -2326,6 +2326,8 @@
    웹브라우저/모바일에서 그냥 열면 둘 다 해당 없음 → 기존과 완전히 똑같이 동작함 */
 const IS_WIDGET = new URLSearchParams(location.search).get('widget') === '1';
 const DESKTOP = window.dadameunDesktop || null;
+/* 안드로이드 앱 안에서 열렸는지 (앱이 window.DadameunAndroid 를 넣어줌). 웹/PC에서는 null → 기존과 동일 */
+const ANDROID = (window.DadameunAndroid && typeof window.DadameunAndroid.syncAlarms === 'function') ? window.DadameunAndroid : null;
 if (IS_WIDGET) document.body.classList.add('widget-mode');
 
 /* ===== Firebase 클라우드 동기화 (로그인한 사용자별로 데이터 분리) ===== */
@@ -2707,6 +2709,7 @@ let curMonth = today.getMonth(); // 0-indexed
 function saveMemos() {
   localStorage.setItem(storageKeyFor(currentAccount), JSON.stringify(memos));
   pushToCloud();
+  syncNativeAlarms(); // 안드로이드 앱이면 바뀐 알람 목록을 앱에 다시 알려줌 (웹/PC에서는 아무것도 안 함)
 }
 function pad(n) { return String(n).padStart(2, '0'); }
 /* 달력 칸에는 여러 줄 내용 중 첫 줄만 짧게 보여줌 (전체 내용은 왼쪽 패널/팝업에서 확인) */
@@ -5142,6 +5145,8 @@ function switchAccount(acc) {
   scrollToMonth(curYear, curMonth, false);
   // 탭을 바꾼 바로 그 순간이 새 탭의 알람 시각이면 기다리지 않고 바로 울리게
   if (typeof checkAlarms === 'function' && (!DESKTOP || IS_WIDGET || DESKTOP.alarmHost)) checkAlarms();
+  // 안드로이드 앱은 지금 탭의 알람만 울리도록 알람 목록을 새 탭 것으로 바꿔줌
+  syncNativeAlarms();
 }
 document.querySelectorAll('.acc-card').forEach((btn) => {
   btn.addEventListener('click', () => switchAccount(btn.dataset.acc));
@@ -5191,7 +5196,7 @@ if (IS_WIDGET) {
 
 /* PC 앱은 며칠씩 켜두는 경우가 많아서, 자정이 지나면 "오늘"이 바뀐 걸 반영하려고 새로고침함
    (입력 중인 창이 열려 있으면 기다렸다가 다음 확인 때 새로고침) */
-if (DESKTOP || IS_WIDGET) {
+if (DESKTOP || IS_WIDGET || ANDROID) {
   const loadedDayKey = keyOf(today.getFullYear(), today.getMonth(), today.getDate());
   setInterval(() => {
     const n = new Date();
@@ -5458,12 +5463,49 @@ function hmToMinutes(hm) {
   return h * 60 + m;
 }
 
+/* ===== 안드로이드 앱 알람 연결 =====
+   웹페이지는 앱이 꺼져 있으면 알람을 울릴 수 없어서, 지금 탭(졸린곰/고민곰)의 앞으로 울릴 알람 목록을
+   안드로이드 앱에 넘겨주면 앱이 휴대폰 알람 기능으로 정확한 시각에 알림을 울려줌.
+   (일정 데이터 자체는 앱에 따로 저장하지 않고, 알람 시각/제목만 넘김) */
+function syncNativeAlarms() {
+  if (!ANDROID) return;
+  try {
+    const list = [];
+    const nowMs = Date.now();
+    const base = new Date();
+    base.setHours(0, 0, 0, 0);
+    for (let i = 0; i < 62 && list.length < 200; i++) {
+      const d = new Date(base);
+      d.setDate(base.getDate() + i);
+      const k = keyOf(d.getFullYear(), d.getMonth(), d.getDate());
+      (memos[k] || []).forEach((it) => {
+        if (!it || typeof it !== 'object' || !it.alarmTime || list.length >= 200) return;
+        const [h, m] = String(it.alarmTime).split(':').map(Number);
+        const at = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m, 0, 0).getTime();
+        if (!(at > nowMs)) return;
+        list.push({
+          key: k + '#' + alarmItemId(currentAccount, it),
+          at,
+          title: '⏰ ' + it.alarmTime + (it.title ? ' ' + it.title : ''),
+          body: it.text || it.title || ''
+        });
+      });
+    }
+    ANDROID.syncAlarms(JSON.stringify(list));
+  } catch (e) { console.warn('앱 알람 전달 실패', e); }
+}
+function getNativeFiredSet() {
+  if (!ANDROID || typeof ANDROID.getFiredIds !== 'function') return new Set();
+  try { return new Set(JSON.parse(ANDROID.getFiredIds() || '[]')); } catch (e) { return new Set(); }
+}
+
 function checkAlarms() {
   const now = new Date();
   const k = keyOf(now.getFullYear(), now.getMonth(), now.getDate());
   const nowHM = pad(now.getHours()) + ':' + pad(now.getMinutes());
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const rangLog = loadAlarmRang(k);
+  const nativeFired = getNativeFiredSet();
   let anyFired = false;
   let rangChanged = false;
   Object.keys(ALARM_ACCOUNTS).forEach((acc) => {
@@ -5488,6 +5530,13 @@ function checkAlarms() {
       if (!it.alarmTime || it.alarmTime > nowHM) return;
       const id = alarmItemId(acc, it);
       if (rangLog.rang[id]) return; // 이 기기에서는 이미 울림
+      if (nativeFired.has(k + '#' + id)) {
+        // 앱이 꺼져 있는 동안 안드로이드 앱이 이미 알림으로 울려줬음 → 화면에서 또 울리지 않음
+        rangLog.rang[id] = true;
+        rangChanged = true;
+        if (!it.alarmFired) { it.alarmFired = true; changed = true; }
+        return;
+      }
       // 아직 아무 기기에서도 안 울린 알람이면(컴퓨터가 꺼져 있었던 경우 등) 늦게라도 울림.
       // 다른 기기에서 이미 울린 알람이면, 거의 같은 때(10분 이내)일 때만 여기서도 울림
       // → 저녁에 폰을 열었을 때 아침에 PC에서 울렸던 알람들이 한꺼번에 또 울리지 않게.
@@ -5539,6 +5588,12 @@ if (!DESKTOP || IS_WIDGET || DESKTOP.alarmHost) {
   });
   checkAlarms();
 }
+syncNativeAlarms();
+// 안드로이드 앱이 백그라운드에서 다시 화면으로 돌아왔을 때 앱이 불러줌
+window.__onNativeResume = () => {
+  if (!DESKTOP || IS_WIDGET || DESKTOP.alarmHost) checkAlarms();
+  syncNativeAlarms();
+};
 updateDdayWidget();
 
 (function showBannerTodayDate() {

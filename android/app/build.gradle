@@ -1,0 +1,50 @@
+plugins {
+    id 'com.android.application'
+}
+
+// 깃허브에서 만들 때마다 번호가 1씩 올라가서, 새 버전을 기존 앱 위에 덮어 설치할 수 있음
+def buildNumber = (System.getenv('GITHUB_RUN_NUMBER') ?: '1') as Integer
+
+android {
+    namespace 'com.dadameun.calendar'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.dadameun.calendar'
+        minSdk 26
+        targetSdk 34
+        versionCode buildNumber
+        versionName "1.0.${buildNumber}"
+    }
+
+    // 항상 같은 서명 키로 만들어야 나중에 업데이트할 때 앱을 지우지 않고 덮어 설치할 수 있음
+    signingConfigs {
+        fixed {
+            storeFile file('dadameun.keystore')
+            storeType 'pkcs12'
+            storePassword 'dadameun'
+            keyAlias 'dadameun'
+            keyPassword 'dadameun'
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.fixed
+        }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.fixed
+        }
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
