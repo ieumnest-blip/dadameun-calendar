@@ -1,0 +1,51 @@
+# 다담은 달력 PC 위젯 설치파일(.exe) 자동 만들기
+# - desktop 폴더 안의 파일이 바뀌어서 깃허브에 올라가면 자동으로 실행돼요.
+# - Actions 탭에서 "Run workflow" 버튼으로 직접 실행할 수도 있어요.
+# - 다 만들어지면 저장소 오른쪽 "Releases"에 설치파일이 올라가요.
+name: PC 위젯 설치파일 만들기
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'desktop/**'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 필요한 도구 설치
+        run: npm install
+
+      - name: 설치파일 만들기
+        run: npx electron-builder --win --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: 설치파일 보관 (Actions 결과에서도 받을 수 있게)
+        uses: actions/upload-artifact@v4
+        with:
+          name: DadameunCalendar-Setup
+          path: desktop/dist/*.exe
+
+      - name: Releases에 올리기
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-${{ github.run_number }}
+          name: 다담은 달력 PC 위젯 (${{ github.run_number }}번째)
+          body: |
+            아래 Assets에서 DadameunCalendar-Setup-....exe 를 받아서 실행하세요.
+            처음 실행할 때 "Windows의 PC 보호" 창이 뜨면 → 추가 정보 → 실행 을 누르면 돼요.
+          files: desktop/dist/*.exe
