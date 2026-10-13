@@ -1,15 +1,14 @@
-/* 다담은, 달력 - 윈도우 PC 위젯 앱
+/* 다담은, 달력 - 윈도우 PC 앱
  *
  * 이 앱은 일정 데이터를 따로 저장하지 않아요.
- * 깃허브 페이지에 올라가 있는 "다담은, 달력" 웹페이지를 작은 위젯 창과 큰 달력 창으로 띄워줄 뿐이고,
+ * 깃허브 페이지에 올라가 있는 "다담은, 달력" 웹페이지를 창 하나로 그대로 띄워줄 뿐이고,
  * 저장/동기화(Firebase)/알람은 원래 달력 코드가 그대로 처리해요.
  * → 기존 일정 데이터의 구조나 저장 방식은 전혀 바뀌지 않아요.
  *
  * 하는 일
- *  - 바탕화면 위젯 창 (오늘/내일/모레 일정, 디데이, 메모, 일정 추가, 졸린곰/고민곰 전환)
- *  - 큰 달력 창 열기
- *  - 작업표시줄 오른쪽(트레이)에 구름 아이콘 → 창을 닫아도 앱은 켜져 있어서 알람이 울림
- *  - 윈도우 켤 때 자동 실행
+ *  - 웹이랑 똑같은 전체 달력 창 하나 (바탕화면 아이콘 / 구름 아이콘 / 뭘 눌러도 이 창이 열림)
+ *  - 창의 X를 눌러도 꺼지지 않고 작업표시줄 오른쪽 구름 아이콘으로 숨어서 알람이 계속 울림
+ *  - 윈도우 켤 때 자동 실행 (켜질 때는 구름 아이콘으로 조용히 시작)
  *  - 데이터 백업 파일 저장
  */
 const { app, BrowserWindow, Tray, Menu, Notification, nativeImage, shell, ipcMain, dialog, screen, net } = require('electron');
@@ -20,14 +19,14 @@ const APP_ID = 'com.dadameun.calendar';
 const ICON_PATH = path.join(__dirname, 'assets', 'icon.png');
 const TRAY_ICON_PATH = path.join(__dirname, 'assets', 'tray.png');
 const PRELOAD_PATH = path.join(__dirname, 'preload.js');
+const STARTED_HIDDEN = process.argv.includes('--hidden'); // 윈도우 자동 실행으로 켜졌을 때
 
-let widgetWin = null;
-let calendarWin = null;
+let mainWin = null;
 let setupWin = null;
 let tray = null;
 let isQuitting = false;
 
-/* ===== 설정 저장 (위젯 위치/크기, 달력 주소 등 - 일정 데이터는 여기 저장하지 않음) ===== */
+/* ===== 설정 저장 (창 위치/크기, 달력 주소 등 - 일정 데이터는 여기 저장하지 않음) ===== */
 const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
 function loadConfig() {
   try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch (e) { return {}; }
@@ -52,16 +51,11 @@ function normalizeAppUrl(raw) {
   if (!/\.html?$/i.test(u.pathname) && !u.pathname.endsWith('/')) u.pathname += '/';
   return u.toString();
 }
-function widgetUrl() {
-  const u = new URL(config.appUrl);
-  u.searchParams.set('widget', '1');
-  return u.toString();
-}
 function appOrigin() {
   try { return new URL(config.appUrl).origin; } catch (e) { return null; }
 }
 
-/* ===== 창 공통: 다른 사이트 링크는 기본 브라우저로 열기 ===== */
+/* ===== 다른 사이트 링크는 기본 브라우저로 열기 ===== */
 function guardNavigation(win) {
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
@@ -77,45 +71,41 @@ function guardNavigation(win) {
   });
 }
 
-/* ===== 위젯 창 ===== */
-function defaultWidgetBounds() {
+/* ===== 달력 창 (웹이랑 똑같은 전체 달력) ===== */
+function defaultBounds() {
   const area = screen.getPrimaryDisplay().workArea;
-  const width = 340, height = 620;
-  return { width, height, x: area.x + area.width - width - 16, y: area.y + 16 };
+  const width = Math.min(1600, area.width - 40);
+  const height = Math.min(960, area.height - 40);
+  return { width, height, x: area.x + Math.round((area.width - width) / 2), y: area.y + Math.round((area.height - height) / 2) };
 }
 function boundsVisible(b) {
   if (!b || typeof b.x !== 'number') return false;
   return screen.getAllDisplays().some((d) => {
     const a = d.workArea;
-    return b.x + 60 > a.x && b.x < a.x + a.width - 60 && b.y >= a.y - 10 && b.y < a.y + a.height - 40;
+    return b.x + 100 > a.x && b.x < a.x + a.width - 100 && b.y >= a.y - 10 && b.y < a.y + a.height - 60;
   });
 }
-
 let boundsSaveTimer = null;
-function rememberWidgetBounds() {
+function rememberBounds() {
   clearTimeout(boundsSaveTimer);
   boundsSaveTimer = setTimeout(() => {
-    if (widgetWin && !widgetWin.isDestroyed()) {
-      config.widgetBounds = widgetWin.getBounds();
-      saveConfig();
-    }
+    if (!mainWin || mainWin.isDestroyed()) return;
+    config.maximized = mainWin.isMaximized();
+    if (!config.maximized && !mainWin.isMinimized()) config.bounds = mainWin.getBounds();
+    saveConfig();
   }, 400);
 }
 
-function createWidget() {
-  const b = boundsVisible(config.widgetBounds) ? config.widgetBounds : defaultWidgetBounds();
-  widgetWin = new BrowserWindow({
+function createMainWindow(showNow) {
+  const b = boundsVisible(config.bounds) ? config.bounds : defaultBounds();
+  mainWin = new BrowserWindow({
     ...b,
-    minWidth: 280,
-    minHeight: 260,
-    maxWidth: 900, // 너무 넓히면 큰 달력용 화면 배치로 바뀌므로 위젯은 이 정도까지만
-    frame: false,
-    resizable: true,
-    skipTaskbar: true,
-    alwaysOnTop: !!config.alwaysOnTop,
+    minWidth: 360,
+    minHeight: 500,
     show: false,
-    title: '다담은 달력 위젯',
+    title: '다담은, 달력',
     icon: ICON_PATH,
+    autoHideMenuBar: true,
     backgroundColor: '#eef2f5',
     webPreferences: {
       preload: PRELOAD_PATH,
@@ -126,66 +116,49 @@ function createWidget() {
       backgroundThrottling: false // 창을 숨겨놔도 알람 확인이 멈추지 않게
     }
   });
-  guardNavigation(widgetWin);
-  widgetWin.loadURL(widgetUrl());
-  widgetWin.once('ready-to-show', () => widgetWin.show());
-  widgetWin.on('move', rememberWidgetBounds);
-  widgetWin.on('resize', rememberWidgetBounds);
-  // 위젯 창을 닫아도 앱은 꺼지지 않고 숨기기만 함 (알람이 계속 울려야 하니까)
-  widgetWin.on('close', (e) => {
-    if (!isQuitting) {
-      e.preventDefault();
-      widgetWin.hide();
-      refreshTrayMenu();
+  guardNavigation(mainWin);
+  mainWin.loadURL(config.appUrl);
+  if (showNow) {
+    mainWin.once('ready-to-show', () => {
+      if (config.maximized) mainWin.maximize();
+      mainWin.show();
+    });
+  }
+  mainWin.on('move', rememberBounds);
+  mainWin.on('resize', rememberBounds);
+  mainWin.on('maximize', rememberBounds);
+  mainWin.on('unmaximize', rememberBounds);
+  // X를 눌러도 앱은 꺼지지 않고 구름 아이콘으로 숨기만 함 (알람이 계속 울려야 하니까)
+  mainWin.on('close', (e) => {
+    if (isQuitting) return;
+    e.preventDefault();
+    mainWin.hide();
+    if (!config.hideTipShown && Notification.isSupported()) {
+      config.hideTipShown = true;
+      saveConfig();
+      new Notification({
+        title: '다담은 달력은 계속 켜져 있어요',
+        body: '알람이 울리도록 작업표시줄 오른쪽 구름 아이콘으로 숨었어요. 완전히 끄려면 구름 아이콘을 우클릭 → 종료.',
+        icon: ICON_PATH
+      }).show();
     }
   });
-  widgetWin.on('show', refreshTrayMenu);
-  widgetWin.on('hide', refreshTrayMenu);
   // 인터넷이 끊겨서 페이지를 못 불러오면 30초 뒤에 다시 시도
-  widgetWin.webContents.on('did-fail-load', (e, code, desc, url, isMainFrame) => {
-    if (!isMainFrame || code === -3) return; // -3: 사용자가 새로고침 등으로 취소한 경우
-    setTimeout(() => { if (widgetWin && !widgetWin.isDestroyed()) widgetWin.loadURL(widgetUrl()); }, 30000);
+  mainWin.webContents.on('did-fail-load', (e, code, desc, url, isMainFrame) => {
+    if (!isMainFrame || code === -3) return; // -3: 새로고침 등으로 취소된 경우
+    setTimeout(() => { if (mainWin && !mainWin.isDestroyed()) mainWin.loadURL(config.appUrl); }, 30000);
   });
 }
 
-function showWidget() {
-  if (!widgetWin || widgetWin.isDestroyed()) createWidget();
-  widgetWin.show();
-  widgetWin.focus();
-}
-function toggleWidget() {
-  if (widgetWin && !widgetWin.isDestroyed() && widgetWin.isVisible()) widgetWin.hide();
-  else showWidget();
-}
-
-/* ===== 큰 달력 창 (원래 달력 화면 그대로) ===== */
-function openCalendar() {
-  if (calendarWin && !calendarWin.isDestroyed()) {
-    if (calendarWin.isMinimized()) calendarWin.restore();
-    calendarWin.show();
-    calendarWin.focus();
+function showMain() {
+  if (!mainWin || mainWin.isDestroyed()) {
+    createMainWindow(true);
     return;
   }
-  const area = screen.getPrimaryDisplay().workArea;
-  calendarWin = new BrowserWindow({
-    width: Math.min(1600, area.width - 40),
-    height: Math.min(960, area.height - 40),
-    center: true,
-    title: '다담은, 달력',
-    icon: ICON_PATH,
-    autoHideMenuBar: true,
-    backgroundColor: '#eef2f5',
-    webPreferences: {
-      preload: PRELOAD_PATH,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      spellcheck: false
-    }
-  });
-  guardNavigation(calendarWin);
-  calendarWin.loadURL(config.appUrl);
-  calendarWin.on('closed', () => { calendarWin = null; });
+  if (mainWin.isMinimized()) mainWin.restore();
+  if (!mainWin.isVisible() && config.maximized) mainWin.maximize();
+  mainWin.show();
+  mainWin.focus();
 }
 
 /* ===== 첫 실행: 달력 주소 입력 창 ===== */
@@ -208,14 +181,14 @@ function openSetup() {
   });
 }
 
-/* 주소가 진짜 "다담은, 달력"이 맞는지, 위젯 기능이 들어간 새 index.html이 올라가 있는지 확인 */
+/* 주소가 진짜 "다담은, 달력"이 맞는지, 새 index.html이 올라가 있는지 확인 */
 async function checkAppUrl(url) {
   try {
     const res = await net.fetch(url, { cache: 'no-store' });
     if (!res.ok) return { ok: false, error: `페이지를 열 수 없어요 (오류 ${res.status}). 주소를 다시 확인해주세요.` };
     const html = await res.text();
     if (!html.includes('다담은')) return { ok: false, error: '이 주소는 "다담은, 달력" 페이지가 아닌 것 같아요.' };
-    if (!html.includes('widget-mode')) {
+    if (!html.includes('alarmHost')) {
       return { ok: false, error: '깃허브에 아직 예전 index.html이 올라가 있어요. 새 index.html을 먼저 올리고 1~2분 뒤에 다시 시도해주세요.' };
     }
     return { ok: true };
@@ -236,42 +209,44 @@ ipcMain.handle('setup:save-url', async (e, raw) => {
   if (firstTime) {
     // 처음 설치했을 때는 윈도우 켤 때 자동 실행을 켜둠 (알람이 울리려면 앱이 켜져 있어야 해서)
     config.autoStart = true;
-    applyAutoStart();
   }
   saveConfig();
+  applyAutoStart();
   if (setupWin && !setupWin.isDestroyed()) setupWin.destroy();
   if (!tray) createTray();
-  if (!widgetWin || widgetWin.isDestroyed()) createWidget();
-  else if (changed) widgetWin.loadURL(widgetUrl());
-  if (changed && calendarWin && !calendarWin.isDestroyed()) calendarWin.loadURL(config.appUrl);
+  if (!mainWin || mainWin.isDestroyed()) createMainWindow(true);
+  else {
+    if (changed) mainWin.loadURL(config.appUrl);
+    showMain();
+  }
   return { ok: true };
 });
 
 /* ===== 달력 페이지에서 PC 앱으로 보내는 요청 ===== */
-ipcMain.on('desktop:open-calendar', () => openCalendar());
-ipcMain.on('desktop:hide-widget', () => { if (widgetWin && !widgetWin.isDestroyed()) widgetWin.hide(); });
+ipcMain.on('desktop:open-calendar', () => showMain());
+ipcMain.on('desktop:hide-widget', () => {});
 ipcMain.on('desktop:alarm', (e, payload) => {
   const title = String((payload && payload.title) || '⏰ 알람').slice(0, 200);
   const body = String((payload && payload.body) || '').slice(0, 500);
-  // 숨겨져 있던 위젯을 앞으로 띄워서 알람 창이 바로 보이게 함
-  showWidget();
-  if (widgetWin) widgetWin.flashFrame(true);
+  // 숨겨져 있던 달력 창을 앞으로 띄워서 알람 창이 바로 보이게 함
+  showMain();
+  if (mainWin) mainWin.flashFrame(true);
   if (Notification.isSupported()) {
     const n = new Notification({ title, body, icon: ICON_PATH });
-    n.on('click', () => showWidget());
+    n.on('click', () => showMain());
     n.show();
   }
 });
 
 /* ===== 백업: 이 컴퓨터에 들어있는 달력 데이터 전체를 파일로 저장 ===== */
 async function saveBackup() {
-  if (!widgetWin || widgetWin.isDestroyed()) {
-    dialog.showMessageBox({ type: 'info', message: '위젯이 열려 있을 때 백업할 수 있어요.' });
+  if (!mainWin || mainWin.isDestroyed()) {
+    dialog.showMessageBox({ type: 'info', message: '달력이 열려 있을 때 백업할 수 있어요.' });
     return;
   }
   let json;
   try {
-    json = await widgetWin.webContents.executeJavaScript(`(function(){
+    json = await mainWin.webContents.executeJavaScript(`(function(){
       const o = {};
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
@@ -280,12 +255,12 @@ async function saveBackup() {
       return JSON.stringify(o);
     })()`);
   } catch (e) {
-    dialog.showMessageBox({ type: 'error', message: '데이터를 읽지 못했어요. 위젯이 다 열린 뒤 다시 시도해주세요.' });
+    dialog.showMessageBox({ type: 'error', message: '데이터를 읽지 못했어요. 달력이 다 열린 뒤 다시 시도해주세요.' });
     return;
   }
   const data = JSON.parse(json || '{}');
   if (!Object.keys(data).some((k) => k.indexOf('yearlyCalendarMemos') === 0)) {
-    dialog.showMessageBox({ type: 'info', message: '아직 이 컴퓨터에 불러온 일정이 없어요. 위젯에서 로그인한 뒤 다시 시도해주세요.' });
+    dialog.showMessageBox({ type: 'info', message: '아직 이 컴퓨터에 불러온 일정이 없어요. 로그인한 뒤 다시 시도해주세요.' });
     return;
   }
   const d = new Date();
@@ -301,30 +276,18 @@ async function saveBackup() {
   dialog.showMessageBox({ type: 'info', message: '백업 파일을 저장했어요.', detail: filePath });
 }
 
-/* ===== 윈도우 시작 시 자동 실행 ===== */
+/* ===== 윈도우 시작 시 자동 실행 (켜질 때는 창 없이 구름 아이콘으로 조용히 시작) ===== */
 function applyAutoStart() {
   if (!app.isPackaged) return; // 개발 중 실행일 때는 건드리지 않음
-  app.setLoginItemSettings({ openAtLogin: !!config.autoStart });
+  app.setLoginItemSettings({ openAtLogin: !!config.autoStart, args: ['--hidden'] });
 }
 
 /* ===== 작업표시줄 오른쪽 구름 아이콘(트레이) ===== */
 function refreshTrayMenu() {
   if (!tray) return;
-  const widgetVisible = !!(widgetWin && !widgetWin.isDestroyed() && widgetWin.isVisible());
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: widgetVisible ? '위젯 숨기기' : '위젯 보이기', click: toggleWidget },
-    { label: '큰 달력 열기', click: openCalendar },
+    { label: '달력 열기', click: showMain },
     { type: 'separator' },
-    {
-      label: '위젯을 항상 맨 위에 표시',
-      type: 'checkbox',
-      checked: !!config.alwaysOnTop,
-      click: (item) => {
-        config.alwaysOnTop = item.checked;
-        saveConfig();
-        if (widgetWin && !widgetWin.isDestroyed()) widgetWin.setAlwaysOnTop(item.checked);
-      }
-    },
     {
       label: '윈도우 시작할 때 자동 실행',
       type: 'checkbox',
@@ -335,9 +298,7 @@ function refreshTrayMenu() {
         applyAutoStart();
       }
     },
-    { label: '위젯 위치 초기화', click: () => { if (widgetWin && !widgetWin.isDestroyed()) { widgetWin.setBounds(defaultWidgetBounds()); showWidget(); } } },
-    { label: '새로고침', click: () => { if (widgetWin && !widgetWin.isDestroyed()) widgetWin.reload(); } },
-    { type: 'separator' },
+    { label: '새로고침', click: () => { if (mainWin && !mainWin.isDestroyed()) mainWin.reload(); } },
     { label: '데이터 백업 파일 저장…', click: saveBackup },
     { label: '달력 주소 변경…', click: openSetup },
     { type: 'separator' },
@@ -348,17 +309,18 @@ function createTray() {
   const img = nativeImage.createFromPath(TRAY_ICON_PATH);
   tray = new Tray(img.isEmpty() ? nativeImage.createFromPath(ICON_PATH).resize({ width: 16, height: 16 }) : img);
   tray.setToolTip('다담은, 달력');
-  tray.on('click', toggleWidget);
+  tray.on('click', showMain);
+  tray.on('double-click', showMain);
   refreshTrayMenu();
 }
 
 /* ===== 앱 시작 ===== */
 if (!app.requestSingleInstanceLock()) {
-  // 이미 켜져 있으면 새로 켜지 않고 기존 위젯만 보여줌
+  // 이미 켜져 있으면 (바탕화면 아이콘을 또 눌러도) 새로 켜지 않고 기존 달력 창을 보여줌
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (config.appUrl) showWidget();
+    if (config.appUrl) showMain();
     else openSetup();
   });
 
@@ -368,12 +330,15 @@ if (!app.requestSingleInstanceLock()) {
       openSetup();
       return;
     }
+    // 예전 버전(위젯 따로 뜨던 버전)에서 쓰던 설정은 그대로 두고, 자동 실행 설정만 새 방식으로 다시 적용
+    if (typeof config.autoStart === 'undefined') config.autoStart = true;
+    saveConfig();
     createTray();
-    createWidget();
+    createMainWindow(!STARTED_HIDDEN); // 자동 실행일 때는 창 없이 구름 아이콘으로만, 직접 켰을 때는 바로 달력 표시
     applyAutoStart();
   });
 
   app.on('before-quit', () => { isQuitting = true; });
-  // 창이 다 닫혀도 트레이에 남아서 알람을 계속 확인함
+  // 창이 다 닫혀도 구름 아이콘에 남아서 알람을 계속 확인함
   app.on('window-all-closed', () => {});
 }

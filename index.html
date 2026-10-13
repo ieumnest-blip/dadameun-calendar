@@ -5369,9 +5369,9 @@ function checkAlarms() {
     showNextAlarm();
   }
 }
-/* PC 앱에서는 큰 달력 창과 위젯 창이 동시에 열려 있을 수 있어서, 알람이 두 번 울리지 않도록
-   (앱이 켜져 있는 동안 항상 살아있는) 위젯 창에서만 알람을 확인함. 웹/모바일은 기존과 동일. */
-if (!DESKTOP || IS_WIDGET) {
+/* PC 앱 안에서는 알람이 두 번 울리지 않도록, 앱이 "알람 담당"으로 정해준 창(alarmHost)이나
+   위젯 창에서만 알람을 확인함. 웹/모바일은 기존과 동일. */
+if (!DESKTOP || IS_WIDGET || DESKTOP.alarmHost) {
   setInterval(checkAlarms, 30000);
   checkAlarms();
 }
