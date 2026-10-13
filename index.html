@@ -5140,6 +5140,8 @@ function switchAccount(acc) {
     renderOverview(overviewYear, curMonth);
   }
   scrollToMonth(curYear, curMonth, false);
+  // 탭을 바꾼 바로 그 순간이 새 탭의 알람 시각이면 기다리지 않고 바로 울리게
+  if (typeof checkAlarms === 'function' && (!DESKTOP || IS_WIDGET || DESKTOP.alarmHost)) checkAlarms();
 }
 document.querySelectorAll('.acc-card').forEach((btn) => {
   btn.addEventListener('click', () => switchAccount(btn.dataset.acc));
@@ -5430,8 +5432,7 @@ document.getElementById('alarmOverlayClose').addEventListener('click', () => {
   if (!alarmShowing && reloadPendingAfterAlarm) location.reload();
 });
 
-/* 지금 보고 있는 계정(탭)뿐 아니라 졸린곰/고민곰 두 계정의 알람을 모두 확인함
-   (예전에는 지금 열어둔 탭의 알람만 울렸음) */
+/* 알람은 지금 켜놓은 탭(졸린곰 또는 고민곰)의 것만 울림 */
 const ALARM_ACCOUNTS = { '1': '💤 졸린곰', '2': '💭 고민곰' };
 
 /* "이 기기에서 이미 울린 알람" 기록 - 기기마다 따로 보관하고 클라우드로는 올리지 않음
@@ -5471,6 +5472,17 @@ function checkAlarms() {
     const accMemos = isCurrent ? memos : loadMemosFor(acc);
     const items = accMemos[k];
     if (!items || items.length === 0) return;
+    if (!isCurrent) {
+      // 알람은 지금 켜놓은 탭(졸린곰/고민곰)의 것만 울림.
+      // 다른 탭의 알람 시간이 지나가면 이 기기에서는 "지나감"으로만 조용히 표시해둠
+      // → 나중에 그 탭으로 바꿨을 때 지난 알람들이 한꺼번에 울리지 않게.
+      items.forEach((it) => {
+        if (!it.alarmTime || it.alarmTime > nowHM) return;
+        const id = alarmItemId(acc, it);
+        if (!rangLog.rang[id]) { rangLog.rang[id] = true; rangChanged = true; }
+      });
+      return;
+    }
     let changed = false;
     items.forEach((it) => {
       if (!it.alarmTime || it.alarmTime > nowHM) return;
