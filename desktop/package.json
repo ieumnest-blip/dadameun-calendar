@@ -1,0 +1,40 @@
+{
+  "name": "dadameun-calendar-desktop",
+  "version": "1.0.0",
+  "description": "다담은, 달력 PC 위젯",
+  "main": "main.js",
+  "author": "다담은",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never"
+  },
+  "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.dadameun.calendar",
+    "productName": "DadameunCalendar",
+    "artifactName": "DadameunCalendar-Setup-${version}.${ext}",
+    "files": [
+      "main.js",
+      "preload.js",
+      "setup.html",
+      "assets/**"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "shortcutName": "다담은 달력",
+      "uninstallDisplayName": "다담은 달력",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true
+    }
+  }
+}

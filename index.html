@@ -1894,12 +1894,94 @@
     flex-shrink: 0;
     align-self: flex-end;
   }
+
+  /* ===== PC 위젯 모드 (주소 끝에 ?widget=1 을 붙여서 열었을 때만 적용) =====
+     달력 화면 대신 오늘/내일/모레 일정 + 디데이 + 메모만 작은 창에 보여줌.
+     저장/동기화/알람은 원래 달력 코드를 그대로 같이 쓰므로 데이터 구조는 전혀 바뀌지 않음. */
+  .widget-bar { display: none; }
+  .widget-toast { display: none; }
+  body.widget-mode header,
+  body.widget-mode main,
+  body.widget-mode .panel-banner,
+  body.widget-mode .cal-nav-btn {
+    display: none !important;
+  }
+  body.widget-mode .widget-bar {
+    display: flex;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    background: #eef2f5;
+    border-bottom: 2px dashed #c7d6de;
+    user-select: none;
+    -webkit-app-region: drag; /* PC 앱에서 이 줄을 잡고 끌면 위젯 창이 움직임 */
+  }
+  body.widget-mode .widget-bar button { -webkit-app-region: no-drag; }
+  .widget-bar .wbar-cloud { width: 30px; height: 30px; flex-shrink: 0; }
+  .widget-bar .wbar-date {
+    font-size: 13.5px;
+    font-weight: 800;
+    color: #1f7bb5;
+    white-space: nowrap;
+  }
+  .widget-bar .wbar-spacer { flex: 1; min-width: 4px; }
+  .widget-bar .acc-card { padding: 3px; }
+  .widget-bar .acc-card .acc-emoji { font-size: 17px; }
+  .widget-bar .wbar-btn {
+    font-family: inherit;
+    border: none;
+    background: #dbe4ea;
+    color: #33546b;
+    border-radius: 8px;
+    padding: 5px 8px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .widget-bar .wbar-btn.primary { background: #3d8fc0; color: #fff; }
+  body.widget-mode .memo-panel {
+    position: static !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: 10px 10px 12px !important;
+  }
+  body.widget-mode .memo-panel.right-panel { padding: 10px; }
+  body.widget-mode .memo-freebox-wrap { margin-top: 10px; }
+  body.widget-mode .modal { max-height: 92vh; }
+  body.widget-mode .widget-toast {
+    display: block;
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    background: #2f3f4d;
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 999px;
+    z-index: 1300;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    white-space: nowrap;
+  }
+  body.widget-mode .widget-toast.show { opacity: 1; }
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 </head>
 <body>
+<script>
+  // 위젯 모드면 화면이 그려지기 전에 미리 표시해서, 큰 달력이 잠깐 번쩍 보이지 않게 함
+  if (new URLSearchParams(location.search).get('widget') === '1') document.body.classList.add('widget-mode');
+</script>
 
 <div class="sync-overlay hidden" id="syncOverlay">
   <div class="sync-emoji">☁️</div>
@@ -1916,6 +1998,26 @@
     <button type="button" id="pwSubmit">로그인</button>
   </div>
 </div>
+
+<!-- PC 위젯 모드에서만 보이는 윗줄 (일반 달력 화면에서는 숨겨져 있음) -->
+<div class="widget-bar" id="widgetBar">
+  <svg class="wbar-cloud" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M18 10.2h-1.26A8 8 0 1 0 9 20h9a4.9 4.9 0 0 0 0-9.8z" fill="#ffffff" stroke="#8ec6f0" stroke-width="1.3" stroke-linejoin="round"/>
+    <circle cx="10.4" cy="16.1" r="0.7" fill="#5a6b7a"/>
+    <circle cx="14.6" cy="16.1" r="0.7" fill="#5a6b7a"/>
+    <circle cx="9.1" cy="17.5" r="1.05" fill="#ffb3c0"/>
+    <circle cx="15.9" cy="17.5" r="1.05" fill="#ffb3c0"/>
+    <path d="M11.7,17.4 q0.8,0.9 1.6,0" stroke="#5a6b7a" stroke-width="0.55" fill="none" stroke-linecap="round"/>
+  </svg>
+  <span class="wbar-date" id="wbarDate"></span>
+  <button type="button" class="acc-card" data-acc="1" title="졸린곰"><span class="acc-emoji">💤</span></button>
+  <button type="button" class="acc-card" data-acc="2" title="고민곰"><span class="acc-emoji">💭</span></button>
+  <span class="wbar-spacer"></span>
+  <button type="button" class="wbar-btn primary" id="wbarAdd" title="일정 추가">＋ 추가</button>
+  <button type="button" class="wbar-btn" id="wbarOpen" title="큰 달력 열기">📅</button>
+  <button type="button" class="wbar-btn" id="wbarHide" title="위젯 숨기기 (작업표시줄 오른쪽 구름 아이콘으로 다시 열 수 있어요)">—</button>
+</div>
+<div class="widget-toast" id="widgetToast"></div>
 
 <header>
   <div class="top-row">
@@ -2218,6 +2320,14 @@
 </div>
 
 <script>
+/* ===== PC 위젯 / PC 앱 구분 =====
+   - IS_WIDGET: 주소 끝에 ?widget=1 이 붙어서 열린 "작은 위젯 창"인지
+   - DESKTOP: 윈도우용 PC 앱 안에서 열렸는지 (PC 앱이 window.dadameunDesktop 을 넣어줌)
+   웹브라우저/모바일에서 그냥 열면 둘 다 해당 없음 → 기존과 완전히 똑같이 동작함 */
+const IS_WIDGET = new URLSearchParams(location.search).get('widget') === '1';
+const DESKTOP = window.dadameunDesktop || null;
+if (IS_WIDGET) document.body.classList.add('widget-mode');
+
 /* ===== Firebase 클라우드 동기화 (로그인한 사용자별로 데이터 분리) ===== */
 const firebaseConfig = {
   apiKey: "AIzaSyCbs8pGZgRcr9vncl-DsyRsl166y1245ic",
@@ -2259,6 +2369,17 @@ function collectLocalData() {
     }
   }
   return data;
+}
+/* 이 기기(브라우저/PC 앱)에 저장된 일정이 하나라도 있는지 */
+function hasAnyLocalMemos() {
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('yearlyCalendarMemos')) {
+      const v = localStorage.getItem(k);
+      if (v && v !== '{}') return true;
+    }
+  }
+  return false;
 }
 function applyCloudData(cloudData) {
   Object.keys(cloudData || {}).forEach((k) => {
@@ -2360,6 +2481,7 @@ function startCloudSyncForUser(uid) {
   }
 
   if (overlay) overlay.classList.remove('hidden');
+  let pullFailed = false;
   cloudDocRef.get().then((snap) => {
     if (snap.exists) {
       const remote = snap.data();
@@ -2370,7 +2492,18 @@ function startCloudSyncForUser(uid) {
     }
   }).catch((e) => {
     console.warn('클라우드 불러오기 실패', e);
+    pullFailed = true;
   }).finally(() => {
+    /* [기존 일정 보호] 새 컴퓨터(PC 앱 처음 설치 등)라서 이 기기에 일정이 하나도 없는데
+       인터넷 문제로 클라우드를 못 받아왔다면, 빈 달력으로 시작했다가 뭔가 저장하는 순간
+       클라우드에 있던 기존 일정을 "빈 상태"로 덮어써버릴 위험이 있음.
+       그래서 이 경우엔 달력을 열지 않고, 받아올 때까지 몇 초마다 다시 시도함. */
+    if (pullFailed && !hasAnyLocalMemos()) {
+      const txt = overlay && overlay.querySelector('.sync-text');
+      if (txt) txt.textContent = '인터넷 연결을 확인하는 중이에요... 잠시 후 다시 시도해요';
+      setTimeout(() => location.reload(), 5000);
+      return;
+    }
     sessionStorage.setItem('dadameunCloudPulled_' + uid, '1');
     location.reload();
   });
@@ -4911,6 +5044,61 @@ document.querySelectorAll('.acc-card').forEach((btn) => {
 });
 updateAccountButtons();
 
+/* [기존 일정 보호] 같은 컴퓨터에서 달력 창이 두 개 열려 있을 때(PC 위젯 + 큰 달력, 또는 브라우저 탭 두 개)
+   한쪽에서 일정을 추가/수정하면 다른 쪽도 그 내용을 바로 다시 읽어오게 함.
+   이게 없으면, 예전 내용을 들고 있던 다른 창이 나중에 저장할 때 방금 추가한 일정을 덮어써서 지워버릴 수 있음. */
+window.addEventListener('storage', (e) => {
+  if (!e.key || !e.key.startsWith('yearlyCalendar') || e.key === ACTIVE_ACCOUNT_KEY) return;
+  if (e.key === storageKeyFor(currentAccount)) {
+    memos = loadMemosFor(currentAccount);
+    // 열려있던 일정 팝업은 항목 위치가 바뀌었을 수 있으니 닫음 (일정 추가 창은 그대로 둠)
+    ['modalBg', 'itemBg'].forEach((id) => document.getElementById(id).classList.remove('show'));
+    renderCalendar();
+    updateDdayWidget();
+    if (viewMode === 'overview') renderOverview(overviewYear, curMonth);
+    else scrollToMonth(curYear, curMonth, false);
+  } else if (e.key === freeMemoKeyFor(currentAccount)) {
+    if (document.activeElement !== document.getElementById('freeMemoBox')) loadFreeMemo(currentAccount);
+  } else if (e.key === quoteMemoKeyFor(currentAccount)) {
+    if (document.activeElement !== document.getElementById('quoteMemoBox')) loadQuoteMemo(currentAccount);
+  }
+});
+
+/* ===== PC 위젯 모드 윗줄 버튼들 ===== */
+if (IS_WIDGET) {
+  const wd = ['일', '월', '화', '수', '목', '금', '토'][today.getDay()];
+  document.getElementById('wbarDate').textContent = `${today.getMonth() + 1}월 ${today.getDate()}일 (${wd})`;
+  document.getElementById('wbarAdd').addEventListener('click', () => {
+    openQuickAdd(keyOf(today.getFullYear(), today.getMonth(), today.getDate()), null, null);
+  });
+  document.getElementById('wbarOpen').addEventListener('click', () => {
+    if (DESKTOP && DESKTOP.openCalendar) DESKTOP.openCalendar();
+    else window.open(location.pathname, '_blank');
+  });
+  const hideBtn = document.getElementById('wbarHide');
+  if (DESKTOP && DESKTOP.hideWidget) hideBtn.addEventListener('click', () => DESKTOP.hideWidget());
+  else hideBtn.style.display = 'none';
+  // 위젯에서 "등록"을 눌렀을 때만 selectDate가 안내 메시지를 띄우도록 표시해둠
+  document.getElementById('addBtn').addEventListener('click', () => {
+    widgetJustAdded = true;
+    setTimeout(() => { widgetJustAdded = false; }, 0);
+  }, true);
+}
+
+/* PC 앱은 며칠씩 켜두는 경우가 많아서, 자정이 지나면 "오늘"이 바뀐 걸 반영하려고 새로고침함
+   (입력 중인 창이 열려 있으면 기다렸다가 다음 확인 때 새로고침) */
+if (DESKTOP || IS_WIDGET) {
+  const loadedDayKey = keyOf(today.getFullYear(), today.getMonth(), today.getDate());
+  setInterval(() => {
+    const n = new Date();
+    if (keyOf(n.getFullYear(), n.getMonth(), n.getDate()) === loadedDayKey) return;
+    if (document.querySelector('.modal-bg.show, .alarm-overlay.show')) return;
+    const focused = document.activeElement;
+    if (focused && (focused.isContentEditable || /^(INPUT|TEXTAREA)$/.test(focused.tagName))) return;
+    location.reload();
+  }, 60000);
+}
+
 /* PC 화면에서 실제 남는 세로 공간을 측정해 달력 칸 높이를 계산
    (모니터 해상도/브라우저 창 크기가 달라져도 항상 빈 여백 없이 꽉 차게) */
 function updateRowHeight() {
@@ -5071,9 +5259,27 @@ function renderSelectedAgenda() {
   }
 }
 
+let widgetJustAdded = false;
 function selectDate(dateKey) {
+  if (IS_WIDGET) {
+    // 위젯은 항상 오늘/내일/모레를 보여줌. 다른 날짜에 일정을 등록했으면 잠깐 안내만 띄움
+    const tk = keyOf(today.getFullYear(), today.getMonth(), today.getDate());
+    if (widgetJustAdded && dateKey !== tk) showWidgetToast('📌 ' + formatShortDate(dateKey) + ' 일정이 등록됐어요');
+    selectedDateKey = null;
+    renderSelectedAgenda();
+    return;
+  }
   selectedDateKey = dateKey;
   renderSelectedAgenda();
+}
+let widgetToastTimer = null;
+function showWidgetToast(msg) {
+  const el = document.getElementById('widgetToast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(widgetToastTimer);
+  widgetToastTimer = setTimeout(() => el.classList.remove('show'), 2500);
 }
 
 // 브라우저 창 크기가 모바일⇄PC 기준선(1100px)을 넘나들 때도 바로 반영되게 함
@@ -5105,11 +5311,15 @@ function playAlarmBeep() {
 function showNextAlarm() {
   if (alarmShowing || alarmQueue.length === 0) return;
   alarmShowing = true;
-  const { dateKey, timeStr, text } = alarmQueue.shift();
-  document.getElementById('alarmOverlayTime').textContent = formatShortDate(dateKey) + ' ' + timeStr;
+  const { dateKey, timeStr, text, accLabel } = alarmQueue.shift();
+  document.getElementById('alarmOverlayTime').textContent = (accLabel ? accLabel + ' · ' : '') + formatShortDate(dateKey) + ' ' + timeStr;
   document.getElementById('alarmOverlayText').textContent = text;
   document.getElementById('alarmOverlay').classList.add('show');
   playAlarmBeep();
+  // PC 앱이면 숨겨져 있던 위젯 창을 앞으로 띄우고 윈도우 알림도 보냄
+  if (DESKTOP && DESKTOP.alarm) {
+    try { DESKTOP.alarm({ title: '⏰ ' + (accLabel ? accLabel + ' · ' : '') + timeStr, body: text }); } catch (e) { /* 무시 */ }
+  }
 }
 document.getElementById('alarmOverlayClose').addEventListener('click', () => {
   document.getElementById('alarmOverlay').classList.remove('show');
@@ -5117,31 +5327,54 @@ document.getElementById('alarmOverlayClose').addEventListener('click', () => {
   showNextAlarm();
 });
 
+/* 지금 보고 있는 계정(탭)뿐 아니라 졸린곰/고민곰 두 계정의 알람을 모두 확인함
+   (예전에는 지금 열어둔 탭의 알람만 울렸음) */
+const ALARM_ACCOUNTS = { '1': '💤 졸린곰', '2': '💭 고민곰' };
 function checkAlarms() {
   const now = new Date();
   const k = keyOf(now.getFullYear(), now.getMonth(), now.getDate());
-  const items = memos[k];
-  if (!items || items.length === 0) return;
   const nowHM = pad(now.getHours()) + ':' + pad(now.getMinutes());
-  let changed = false;
-  items.forEach((it) => {
-    if (it.alarmTime && !it.alarmFired && it.alarmTime <= nowHM) {
-      it.alarmFired = true;
-      changed = true;
-      alarmQueue.push({ dateKey: k, timeStr: it.alarmTime, text: it.text });
-      if (window.Notification && Notification.permission === 'granted') {
-        try { new Notification('⏰ ' + it.text, { body: k + ' ' + it.alarmTime }); } catch (e) { /* 무시 */ }
+  let anyFired = false;
+  Object.keys(ALARM_ACCOUNTS).forEach((acc) => {
+    const isCurrent = acc === currentAccount;
+    // 지금 탭은 화면에 떠 있는 데이터(memos)를, 다른 탭은 저장된 데이터를 읽어서 확인
+    const accMemos = isCurrent ? memos : loadMemosFor(acc);
+    const items = accMemos[k];
+    if (!items || items.length === 0) return;
+    let changed = false;
+    items.forEach((it) => {
+      if (it.alarmTime && !it.alarmFired && it.alarmTime <= nowHM) {
+        it.alarmFired = true;
+        changed = true;
+        const accLabel = isCurrent ? '' : ALARM_ACCOUNTS[acc];
+        alarmQueue.push({ dateKey: k, timeStr: it.alarmTime, text: it.text, accLabel });
+        // PC 앱은 앱 쪽에서 윈도우 알림을 보내므로, 브라우저 알림은 웹에서만
+        if (!DESKTOP && window.Notification && Notification.permission === 'granted') {
+          try { new Notification('⏰ ' + (accLabel ? accLabel + ' · ' : '') + it.text, { body: k + ' ' + it.alarmTime }); } catch (e) { /* 무시 */ }
+        }
+      }
+    });
+    if (changed) {
+      anyFired = true;
+      if (isCurrent) {
+        saveMemos();
+      } else {
+        localStorage.setItem(storageKeyFor(acc), JSON.stringify(accMemos));
+        pushToCloud();
       }
     }
   });
-  if (changed) {
-    saveMemos();
+  if (anyFired) {
     renderCalendar();
     showNextAlarm();
   }
 }
-setInterval(checkAlarms, 30000);
-checkAlarms();
+/* PC 앱에서는 큰 달력 창과 위젯 창이 동시에 열려 있을 수 있어서, 알람이 두 번 울리지 않도록
+   (앱이 켜져 있는 동안 항상 살아있는) 위젯 창에서만 알람을 확인함. 웹/모바일은 기존과 동일. */
+if (!DESKTOP || IS_WIDGET) {
+  setInterval(checkAlarms, 30000);
+  checkAlarms();
+}
 updateDdayWidget();
 
 (function showBannerTodayDate() {
