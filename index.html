@@ -3283,6 +3283,9 @@ function moveNormalItemToDate(key, idx, newKey) {
   const [item] = memos[key].splice(idx, 1);
   if (memos[key].length === 0) delete memos[key];
   if (!memos[newKey]) memos[newKey] = [];
+  // 디데이 항목은 옮긴 날짜가 곧 디데이 기준일이므로, 칸을 옮기면 ddayTarget도 같이 옮겨줘야
+  // 디데이 계산(D-16 등)이 새 날짜 기준으로 바뀜 (예전엔 칸만 옮기고 이 값은 그대로 남아있었음)
+  if (item.isDday) item.ddayTarget = newKey;
   memos[newKey].push(item);
   saveMemos();
   return newKey;
