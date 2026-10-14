@@ -1602,6 +1602,65 @@
     margin-bottom: 6px;
     flex-shrink: 0;
   }
+  /* 설치확인기간 칸과 메모 칸 사이를 위아래로 끌어서 크기 조절 */
+  .memo-splitter {
+    display: none;
+    height: 14px;
+    cursor: ns-resize;
+    touch-action: none;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .memo-splitter.show { display: flex; }
+  .memo-splitter::before {
+    content: '';
+    width: 46px; height: 5px;
+    border-radius: 3px;
+    background: #c3d4df;
+  }
+  .memo-splitter:hover::before, .memo-splitter.dragging::before { background: #3d8fc0; }
+  .memo-splitter.show + .memo-freebox-wrap { margin-top: 0; }
+  .memo-freebox-wrap.resized {
+    flex: 0 0 auto;
+    height: var(--h);
+    min-height: 80px;
+  }
+  .memo-freebox-wrap.resized .memo-box {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+  }
+  .memo-color-bar {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+    flex-shrink: 0;
+  }
+  .memo-color-bar .mc-label { font-size: 11px; color: #7fa3b8; margin-right: 2px; }
+  .memo-color-bar .mc-swatch {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px #cfdbe3;
+    padding: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .memo-color-bar .mc-swatch.mc-default {
+    background: #fff;
+    color: #33505f;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 18px;
+    width: auto;
+    border-radius: 11px;
+    padding: 0 7px;
+  }
   .memo-box {
     min-height: 120px;
     max-height: 260px;
@@ -1617,34 +1676,6 @@
     content: attr(data-placeholder);
     color: #9fb8c4;
   }
-  /* 메모에서 글자를 드래그로 선택하면 바로 아래에 뜨는 글자색 고르기 막대 */
-  .memo-color-bar {
-    position: fixed;
-    z-index: 1400;
-    display: none;
-    flex-wrap: wrap;
-    gap: 6px;
-    width: 300px;
-    max-width: calc(100vw - 16px);
-    box-sizing: border-box;
-    padding: 8px 10px;
-    background: #fff;
-    border: 1px solid #d6e2ea;
-    border-radius: 12px;
-    box-shadow: 0 6px 18px rgba(40, 70, 90, 0.18);
-    user-select: none;
-    -webkit-user-select: none;
-    touch-action: manipulation;
-  }
-  .memo-color-bar.show { display: flex; }
-  .memo-color-bar .mcb-label {
-    width: 100%;
-    font-size: 11.5px;
-    font-weight: 700;
-    color: #4a7a92;
-  }
-  .memo-color-bar .swatch { width: 24px; flex: 0 0 24px; }
-  .memo-color-bar .swatch-default { background: #33505f; }
   .memo-box img {
     max-width: 100%;
     border-radius: 8px;
@@ -1922,94 +1953,12 @@
     flex-shrink: 0;
     align-self: flex-end;
   }
-
-  /* ===== PC 위젯 모드 (주소 끝에 ?widget=1 을 붙여서 열었을 때만 적용) =====
-     달력 화면 대신 오늘/내일/모레 일정 + 디데이 + 메모만 작은 창에 보여줌.
-     저장/동기화/알람은 원래 달력 코드를 그대로 같이 쓰므로 데이터 구조는 전혀 바뀌지 않음. */
-  .widget-bar { display: none; }
-  .widget-toast { display: none; }
-  body.widget-mode header,
-  body.widget-mode main,
-  body.widget-mode .panel-banner,
-  body.widget-mode .cal-nav-btn {
-    display: none !important;
-  }
-  body.widget-mode .widget-bar {
-    display: flex;
-    position: sticky;
-    top: 0;
-    z-index: 30;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 10px;
-    background: #eef2f5;
-    border-bottom: 2px dashed #c7d6de;
-    user-select: none;
-    -webkit-app-region: drag; /* PC 앱에서 이 줄을 잡고 끌면 위젯 창이 움직임 */
-  }
-  body.widget-mode .widget-bar button { -webkit-app-region: no-drag; }
-  .widget-bar .wbar-cloud { width: 30px; height: 30px; flex-shrink: 0; }
-  .widget-bar .wbar-date {
-    font-size: 13.5px;
-    font-weight: 800;
-    color: #1f7bb5;
-    white-space: nowrap;
-  }
-  .widget-bar .wbar-spacer { flex: 1; min-width: 4px; }
-  .widget-bar .acc-card { padding: 3px; }
-  .widget-bar .acc-card .acc-emoji { font-size: 17px; }
-  .widget-bar .wbar-btn {
-    font-family: inherit;
-    border: none;
-    background: #dbe4ea;
-    color: #33546b;
-    border-radius: 8px;
-    padding: 5px 8px;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-  .widget-bar .wbar-btn.primary { background: #3d8fc0; color: #fff; }
-  body.widget-mode .memo-panel {
-    position: static !important;
-    width: auto !important;
-    max-width: none !important;
-    margin: 10px 10px 12px !important;
-  }
-  body.widget-mode .memo-panel.right-panel { padding: 10px; }
-  body.widget-mode .memo-freebox-wrap { margin-top: 10px; }
-  body.widget-mode .modal { max-height: 92vh; }
-  body.widget-mode .widget-toast {
-    display: block;
-    position: fixed;
-    left: 50%;
-    bottom: 16px;
-    transform: translateX(-50%);
-    background: #2f3f4d;
-    color: #fff;
-    font-size: 12.5px;
-    font-weight: 600;
-    padding: 8px 14px;
-    border-radius: 999px;
-    z-index: 1300;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s ease;
-    white-space: nowrap;
-  }
-  body.widget-mode .widget-toast.show { opacity: 1; }
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 </head>
 <body>
-<script>
-  // 위젯 모드면 화면이 그려지기 전에 미리 표시해서, 큰 달력이 잠깐 번쩍 보이지 않게 함
-  if (new URLSearchParams(location.search).get('widget') === '1') document.body.classList.add('widget-mode');
-</script>
 
 <div class="sync-overlay hidden" id="syncOverlay">
   <div class="sync-emoji">☁️</div>
@@ -2026,26 +1975,6 @@
     <button type="button" id="pwSubmit">로그인</button>
   </div>
 </div>
-
-<!-- PC 위젯 모드에서만 보이는 윗줄 (일반 달력 화면에서는 숨겨져 있음) -->
-<div class="widget-bar" id="widgetBar">
-  <svg class="wbar-cloud" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path d="M18 10.2h-1.26A8 8 0 1 0 9 20h9a4.9 4.9 0 0 0 0-9.8z" fill="#ffffff" stroke="#8ec6f0" stroke-width="1.3" stroke-linejoin="round"/>
-    <circle cx="10.4" cy="16.1" r="0.7" fill="#5a6b7a"/>
-    <circle cx="14.6" cy="16.1" r="0.7" fill="#5a6b7a"/>
-    <circle cx="9.1" cy="17.5" r="1.05" fill="#ffb3c0"/>
-    <circle cx="15.9" cy="17.5" r="1.05" fill="#ffb3c0"/>
-    <path d="M11.7,17.4 q0.8,0.9 1.6,0" stroke="#5a6b7a" stroke-width="0.55" fill="none" stroke-linecap="round"/>
-  </svg>
-  <span class="wbar-date" id="wbarDate"></span>
-  <button type="button" class="acc-card" data-acc="1" title="졸린곰"><span class="acc-emoji">💤</span></button>
-  <button type="button" class="acc-card" data-acc="2" title="고민곰"><span class="acc-emoji">💭</span></button>
-  <span class="wbar-spacer"></span>
-  <button type="button" class="wbar-btn primary" id="wbarAdd" title="일정 추가">＋ 추가</button>
-  <button type="button" class="wbar-btn" id="wbarOpen" title="큰 달력 열기">📅</button>
-  <button type="button" class="wbar-btn" id="wbarHide" title="위젯 숨기기 (작업표시줄 오른쪽 구름 아이콘으로 다시 열 수 있어요)">—</button>
-</div>
-<div class="widget-toast" id="widgetToast"></div>
 
 <header>
   <div class="top-row">
@@ -2093,6 +2022,11 @@
 
 <div class="memo-panel memo-panel--cards" id="memoPanel">
   <div id="todayAgenda"></div>
+  <div class="memo-freebox-wrap" id="checkMemoWrap" style="display:none;">
+    <div class="memo-freebox-title">✅ Check</div>
+    <div class="memo-color-bar" data-for="checkMemoBox"></div>
+    <div class="memo-box" id="checkMemoBox" contenteditable="true" data-placeholder="Check 메모를 입력하세요..."></div>
+  </div>
 </div>
 
 <div class="memo-panel right-panel" id="ddayPanel">
@@ -2114,12 +2048,20 @@
     <span class="banner-date" id="bannerTodayDate"></span>
   </div>
   <div class="dday-widget" id="ddayWidget" style="display:none;"></div>
+  <div class="memo-freebox-wrap" id="installMemoWrap" style="display:none;">
+    <div class="memo-freebox-title">❗ 설치확인기간</div>
+    <div class="memo-color-bar" data-for="installMemoBox"></div>
+    <div class="memo-box" id="installMemoBox" contenteditable="true" data-placeholder="설치확인기간을 입력하세요..."></div>
+  </div>
+  <div class="memo-splitter" id="memoSplitter" title="위아래로 끌어서 크기 조절 (더블클릭: 원래대로)"></div>
   <div class="memo-freebox-wrap">
     <div class="memo-freebox-title">📝 메모</div>
+    <div class="memo-color-bar" data-for="freeMemoBox"></div>
     <div class="memo-box" id="freeMemoBox" contenteditable="true" data-placeholder="메모를 입력하세요..."></div>
   </div>
   <div class="memo-freebox-wrap" id="quoteMemoWrap" style="display:none;">
     <div class="memo-freebox-title">📑 견적서 &amp; 제안서</div>
+    <div class="memo-color-bar" data-for="quoteMemoBox"></div>
     <div class="memo-box" id="quoteMemoBox" contenteditable="true" data-placeholder="견적서 및 제안서 내용을 입력하세요..."></div>
   </div>
 </div>
@@ -2348,16 +2290,6 @@
 </div>
 
 <script>
-/* ===== PC 위젯 / PC 앱 구분 =====
-   - IS_WIDGET: 주소 끝에 ?widget=1 이 붙어서 열린 "작은 위젯 창"인지
-   - DESKTOP: 윈도우용 PC 앱 안에서 열렸는지 (PC 앱이 window.dadameunDesktop 을 넣어줌)
-   웹브라우저/모바일에서 그냥 열면 둘 다 해당 없음 → 기존과 완전히 똑같이 동작함 */
-const IS_WIDGET = new URLSearchParams(location.search).get('widget') === '1';
-const DESKTOP = window.dadameunDesktop || null;
-/* 안드로이드 앱 안에서 열렸는지 (앱이 window.DadameunAndroid 를 넣어줌). 웹/PC에서는 null → 기존과 동일 */
-const ANDROID = (window.DadameunAndroid && typeof window.DadameunAndroid.syncAlarms === 'function') ? window.DadameunAndroid : null;
-if (IS_WIDGET) document.body.classList.add('widget-mode');
-
 /* ===== Firebase 클라우드 동기화 (로그인한 사용자별로 데이터 분리) ===== */
 const firebaseConfig = {
   apiKey: "AIzaSyCbs8pGZgRcr9vncl-DsyRsl166y1245ic",
@@ -2399,17 +2331,6 @@ function collectLocalData() {
     }
   }
   return data;
-}
-/* 이 기기(브라우저/PC 앱)에 저장된 일정이 하나라도 있는지 */
-function hasAnyLocalMemos() {
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (k && k.startsWith('yearlyCalendarMemos')) {
-      const v = localStorage.getItem(k);
-      if (v && v !== '{}') return true;
-    }
-  }
-  return false;
 }
 function applyCloudData(cloudData) {
   Object.keys(cloudData || {}).forEach((k) => {
@@ -2479,25 +2400,10 @@ document.addEventListener('visibilitychange', () => {
     if ((remote.updatedAt || 0) > getLastAppliedUpdate()) {
       applyCloudData(remote.data);
       recordAppliedUpdate(remote.updatedAt);
-      reloadForRemoteChange();
+      location.reload();
     }
   }).catch((e) => console.warn('클라우드 재확인 실패', e));
 });
-
-/* 다른 기기에서 바뀐 내용을 받으면 새로고침해서 반영하는데, 알람 창이 떠 있는 중이면
-   (예: PC와 폰에서 같은 알람이 동시에 울림) 알람 창이 사라지지 않게 "확인"을 누를 때까지 기다림.
-   기다리는 동안에도 화면이 들고 있는 일정은 방금 받은 최신 내용으로 바꿔둬서,
-   그 사이에 저장이 일어나도 다른 기기에서 바뀐 내용을 덮어쓰지 않게 함. */
-let reloadPendingAfterAlarm = false;
-function reloadForRemoteChange() {
-  const ov = document.getElementById('alarmOverlay');
-  if (ov && ov.classList.contains('show')) {
-    reloadPendingAfterAlarm = true;
-    try { memos = loadMemosFor(currentAccount); } catch (e) { /* 무시 */ }
-    return;
-  }
-  location.reload();
-}
 
 /* 로그인한 사용자(uid)의 문서와 동기화를 시작. 로그인 성공 후 한 번만 호출됨 */
 function startCloudSyncForUser(uid) {
@@ -2520,13 +2426,12 @@ function startCloudSyncForUser(uid) {
       if (remote.updatedBy === CLIENT_ID) return; // 내가 방금 쓴 변경은 무시
       applyCloudData(remote.data);
       recordAppliedUpdate(remote.updatedAt);
-      reloadForRemoteChange();
+      location.reload();
     });
     return;
   }
 
   if (overlay) overlay.classList.remove('hidden');
-  let pullFailed = false;
   cloudDocRef.get().then((snap) => {
     if (snap.exists) {
       const remote = snap.data();
@@ -2537,18 +2442,7 @@ function startCloudSyncForUser(uid) {
     }
   }).catch((e) => {
     console.warn('클라우드 불러오기 실패', e);
-    pullFailed = true;
   }).finally(() => {
-    /* [기존 일정 보호] 새 컴퓨터(PC 앱 처음 설치 등)라서 이 기기에 일정이 하나도 없는데
-       인터넷 문제로 클라우드를 못 받아왔다면, 빈 달력으로 시작했다가 뭔가 저장하는 순간
-       클라우드에 있던 기존 일정을 "빈 상태"로 덮어써버릴 위험이 있음.
-       그래서 이 경우엔 달력을 열지 않고, 받아올 때까지 몇 초마다 다시 시도함. */
-    if (pullFailed && !hasAnyLocalMemos()) {
-      const txt = overlay && overlay.querySelector('.sync-text');
-      if (txt) txt.textContent = '인터넷 연결을 확인하는 중이에요... 잠시 후 다시 시도해요';
-      setTimeout(() => location.reload(), 5000);
-      return;
-    }
     sessionStorage.setItem('dadameunCloudPulled_' + uid, '1');
     location.reload();
   });
@@ -2652,10 +2546,35 @@ function saveQuoteMemo() {
 }
 // 졸린곰(계정1)은 기존처럼 메모 박스 하나만, 고민곰(계정2)은 견적서&제안서 박스를 추가로 보여줌
 function updateQuoteMemoVisibility(acc) {
-  const wrap = document.getElementById('quoteMemoWrap');
-  if (!wrap) return;
-  wrap.style.display = (acc === '2') ? 'flex' : 'none';
+  const show = (id, on) => {
+    const wrap = document.getElementById(id);
+    if (wrap) wrap.style.display = on ? 'flex' : 'none';
+  };
+  show('quoteMemoWrap', acc === '2');
+  // 졸린곰(계정1) 전용: 왼쪽 "Check" 메모칸, 오른쪽 "설치확인기간" 메모칸
+  show('checkMemoWrap', acc === '1');
+  show('installMemoWrap', acc === '1');
+  const sp = document.getElementById('memoSplitter');
+  if (sp) sp.classList.toggle('show', acc === '1');
 }
+
+/* 계정별로 따로 저장되는 추가 메모칸 (저장 키가 yearlyCalendar로 시작해서 클라우드에도 같이 동기화됨) */
+function makeMemoBoxStore(boxId, keyPrefix) {
+  return {
+    load(acc) {
+      const box = document.getElementById(boxId);
+      if (box) box.innerHTML = localStorage.getItem(keyPrefix + acc) || '';
+    },
+    save() {
+      const box = document.getElementById(boxId);
+      if (!box) return;
+      localStorage.setItem(keyPrefix + currentAccount, box.innerHTML);
+      pushToCloud();
+    }
+  };
+}
+const checkMemoStore = makeMemoBoxStore('checkMemoBox', 'yearlyCalendarCheckMemo_acc');
+const installMemoStore = makeMemoBoxStore('installMemoBox', 'yearlyCalendarInstallMemo_acc');
 
 function attachMemoBoxHandlers(boxId, saveFn) {
   const box = document.getElementById(boxId);
@@ -2680,123 +2599,118 @@ function attachMemoBoxHandlers(boxId, saveFn) {
   });
 }
 
+/* 메모 글씨 색상: 글자를 드래그해서 선택한 뒤 색 동그라미를 누르면 선택한 글자만 색이 바뀜.
+   (모바일은 버튼을 누르는 순간 선택이 풀릴 수 있어서, 마지막 선택 범위를 기억해뒀다가 되살려 적용함) */
+const MEMO_TEXT_COLORS = ['#e03131', '#f08c00', '#2f9e44', '#1c7ed6', '#7048e8', '#d6336c', '#868e96'];
+const MEMO_DEFAULT_TEXT_COLOR = '#33505f';
+function setupMemoColorBar(boxId, saveFn) {
+  const box = document.getElementById(boxId);
+  const bar = document.querySelector('.memo-color-bar[data-for="' + boxId + '"]');
+  if (!box || !bar) return;
+  let savedRange = null;
+  document.addEventListener('selectionchange', () => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    if (box.contains(sel.anchorNode) && box.contains(sel.focusNode)) {
+      savedRange = sel.getRangeAt(0).cloneRange();
+    }
+  });
+  function applyColor(color) {
+    if (!savedRange) return;
+    box.focus();
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(savedRange);
+    document.execCommand('styleWithCSS', false, true);
+    document.execCommand('foreColor', false, color);
+    saveFn();
+  }
+  const label = document.createElement('span');
+  label.className = 'mc-label';
+  label.textContent = '글자색';
+  bar.appendChild(label);
+  MEMO_TEXT_COLORS.forEach((c) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mc-swatch';
+    b.style.background = c;
+    b.title = '선택한 글씨를 이 색으로';
+    b.addEventListener('mousedown', (e) => e.preventDefault());
+    b.addEventListener('click', () => applyColor(c));
+    bar.appendChild(b);
+  });
+  const def = document.createElement('button');
+  def.type = 'button';
+  def.className = 'mc-swatch mc-default';
+  def.textContent = '기본';
+  def.title = '선택한 글씨를 기본 색으로';
+  def.addEventListener('mousedown', (e) => e.preventDefault());
+  def.addEventListener('click', () => applyColor(MEMO_DEFAULT_TEXT_COLOR));
+  bar.appendChild(def);
+}
+
 loadFreeMemo(currentAccount);
 loadQuoteMemo(currentAccount);
+checkMemoStore.load(currentAccount);
+installMemoStore.load(currentAccount);
 updateQuoteMemoVisibility(currentAccount);
 attachMemoBoxHandlers('freeMemoBox', saveFreeMemo);
 attachMemoBoxHandlers('quoteMemoBox', saveQuoteMemo);
+setupMemoColorBar('freeMemoBox', saveFreeMemo);
+setupMemoColorBar('quoteMemoBox', saveQuoteMemo);
+attachMemoBoxHandlers('checkMemoBox', checkMemoStore.save);
+attachMemoBoxHandlers('installMemoBox', installMemoStore.save);
+setupMemoColorBar('checkMemoBox', checkMemoStore.save);
+setupMemoColorBar('installMemoBox', installMemoStore.save);
 
-/* ===== 메모 글자색 바꾸기 =====
-   메모(또는 견적서&제안서) 칸에서 글자를 드래그해서 선택하면 바로 아래에 색 고르기 막대가 뜸.
-   색을 누르면 선택한 글자만 그 색으로 바뀌고, 메모는 원래처럼 저장/동기화됨.
-   (PC: 마우스로 드래그 / 휴대폰: 글자를 꾹 눌러 선택한 뒤 손잡이로 범위 조절) */
-(function setupMemoColorBar() {
-  const MEMO_BOXES = { freeMemoBox: saveFreeMemo, quoteMemoBox: saveQuoteMemo };
-  const DEFAULT_TEXT_COLOR = '#33505f'; // 메모 기본 글자색
-  const COLORS = [
-    ['', '기본색'], ['#e06565', '빨강'], ['#c2255c', '자주'], ['#ff8c69', '산호'], ['#f4a83a', '주황'],
-    ['#ffd23c', '노랑'], ['#b5a642', '카키'], ['#7a8b3f', '올리브'], ['#5fbf7a', '초록'], ['#a8d94f', '라임'],
-    ['#4fd1c5', '민트'], ['#22c1c3', '시안'], ['#6ec3e8', '하늘'], ['#3d8fc0', '파랑'], ['#3b5bdb', '남색'],
-    ['#5b4fc7', '인디고'], ['#a880e0', '보라'], ['#b8a9e3', '라벤더'], ['#e07fb8', '분홍'], ['#a67c52', '갈색'],
-    ['#8a95a0', '회색'], ['#4a4a4a', '검정']
-  ];
-
-  const bar = document.createElement('div');
-  bar.className = 'memo-color-bar';
-  bar.id = 'memoColorBar';
-  const label = document.createElement('div');
-  label.className = 'mcb-label';
-  label.textContent = '🎨 선택한 글자 색 바꾸기';
-  bar.appendChild(label);
-  COLORS.forEach(([color, name]) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'swatch' + (color ? '' : ' swatch-default');
-    if (color) b.style.background = color;
-    b.title = name;
-    b.dataset.color = color;
-    bar.appendChild(b);
-  });
-  document.body.appendChild(bar);
-
-  let savedRange = null;
-  let activeBoxId = null;
-  let updateTimer = null;
-  const isTouch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-
-  // 지금 선택된 글자가 메모 칸 안에 있는지
-  function selectionInMemo() {
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
-    const range = sel.getRangeAt(0);
-    if (!range.toString().trim()) return null;
-    for (const id of Object.keys(MEMO_BOXES)) {
-      const box = document.getElementById(id);
-      if (box && box.contains(range.commonAncestorContainer)) return { id, range };
+/* "설치확인기간" 칸과 "메모" 칸 사이 손잡이를 위아래로 끌면 설치확인기간 칸 높이가 바뀌고,
+   메모 칸이 나머지를 채움. 마우스/터치 모두 지원, 기기마다 높이를 기억하고 더블클릭하면 원래대로. */
+(function setupMemoSplitter() {
+  const splitter = document.getElementById('memoSplitter');
+  const top = document.getElementById('installMemoWrap');
+  const bottom = splitter ? splitter.nextElementSibling : null;
+  if (!splitter || !top || !bottom) return;
+  const HKEY = 'dadameunInstallMemoHeight';
+  function applyHeight(h) {
+    if (!h) {
+      top.classList.remove('resized');
+      top.style.removeProperty('--h');
+      return;
     }
-    return null;
+    top.classList.add('resized');
+    top.style.setProperty('--h', h + 'px');
   }
-
-  function hideBar() {
-    bar.classList.remove('show');
-  }
-
-  function placeBar(range) {
-    const rect = range.getBoundingClientRect();
-    bar.classList.add('show');
-    const bw = bar.offsetWidth;
-    const bh = bar.offsetHeight;
-    // 휴대폰은 선택 손잡이가 글자 바로 아래에 생겨서 조금 더 아래에 띄움
-    const gap = isTouch ? 30 : 10;
-    let left = rect.left + rect.width / 2 - bw / 2;
-    left = Math.max(8, Math.min(left, window.innerWidth - bw - 8));
-    let top = rect.bottom + gap;
-    if (top + bh > window.innerHeight - 8) top = rect.top - bh - 10; // 아래 공간이 없으면 위로
-    top = Math.max(8, top);
-    bar.style.left = left + 'px';
-    bar.style.top = top + 'px';
-  }
-
-  function refreshBar() {
-    const hit = selectionInMemo();
-    if (!hit) { hideBar(); return; }
-    savedRange = hit.range.cloneRange();
-    activeBoxId = hit.id;
-    placeBar(hit.range);
-  }
-
-  document.addEventListener('selectionchange', () => {
-    clearTimeout(updateTimer);
-    updateTimer = setTimeout(refreshBar, 120);
-  });
-  // 스크롤하면 막대도 선택한 글자를 따라감
-  window.addEventListener('scroll', () => {
-    if (bar.classList.contains('show') && savedRange) placeBar(savedRange);
-  }, true);
-  window.addEventListener('resize', hideBar);
-
-  function applyColor(color) {
-    const box = document.getElementById(activeBoxId);
-    if (!box || !savedRange) return;
-    const sel = window.getSelection();
-    box.focus({ preventScroll: true });
-    sel.removeAllRanges();
-    sel.addRange(savedRange);
-    try { document.execCommand('styleWithCSS', false, true); } catch (e) { /* 무시 */ }
-    document.execCommand('foreColor', false, color || DEFAULT_TEXT_COLOR);
-    MEMO_BOXES[activeBoxId]();
-    // 선택은 그대로 둬서 다른 색으로 바로 다시 바꿀 수 있게 함
-    if (sel.rangeCount) savedRange = sel.getRangeAt(0).cloneRange();
-  }
-
-  // 색을 누를 때 메모의 글자 선택이 풀리지 않도록, 누르는 순간 바로 처리
-  bar.addEventListener('pointerdown', (e) => {
+  try { applyHeight(Number(localStorage.getItem(HKEY)) || 0); } catch (e) {}
+  let startY = 0, startH = 0, maxH = 0, dragging = false;
+  splitter.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    startY = e.clientY;
+    startH = top.getBoundingClientRect().height;
+    const bottomH = bottom.getBoundingClientRect().height;
+    const desktop = window.matchMedia('(min-width: 1100px)').matches;
+    maxH = desktop ? startH + bottomH - 100 : 900;
+    splitter.classList.add('dragging');
+    splitter.setPointerCapture(e.pointerId);
     e.preventDefault();
-    const btn = e.target.closest('.swatch');
-    if (btn) applyColor(btn.dataset.color);
   });
-  bar.addEventListener('mousedown', (e) => e.preventDefault());
-  bar.addEventListener('click', (e) => e.preventDefault());
+  splitter.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const h = Math.max(80, Math.min(maxH, startH + (e.clientY - startY)));
+    applyHeight(Math.round(h));
+  });
+  function endDrag() {
+    if (!dragging) return;
+    dragging = false;
+    splitter.classList.remove('dragging');
+    const h = top.classList.contains('resized') ? parseInt(top.style.getPropertyValue('--h'), 10) : 0;
+    try { localStorage.setItem(HKEY, String(h || 0)); } catch (e) {}
+  }
+  splitter.addEventListener('pointerup', endDrag);
+  splitter.addEventListener('pointercancel', endDrag);
+  splitter.addEventListener('dblclick', () => {
+    applyHeight(0);
+    try { localStorage.setItem(HKEY, '0'); } catch (e) {}
+  });
 })();
 
 /* 일정 순서(위/아래, 기간 막대 쌓임 순서)를 사용자가 임의로 바꿀 수 있도록
@@ -2850,7 +2764,6 @@ let curMonth = today.getMonth(); // 0-indexed
 function saveMemos() {
   localStorage.setItem(storageKeyFor(currentAccount), JSON.stringify(memos));
   pushToCloud();
-  syncNativeAlarms(); // 안드로이드 앱이면 바뀐 알람 목록을 앱에 다시 알려줌 (웹/PC에서는 아무것도 안 함)
 }
 function pad(n) { return String(n).padStart(2, '0'); }
 /* 달력 칸에는 여러 줄 내용 중 첫 줄만 짧게 보여줌 (전체 내용은 왼쪽 패널/팝업에서 확인) */
@@ -3513,38 +3426,6 @@ function applyMemoTitle(key, idx, newTitle) {
 }
 
 /* 일정 <-> 할일 전환 (기간일정이면 같은 groupId를 가진 모든 날짜의 항목에 다 같이 적용) */
-/* 이미 등록된 일정의 알람을 새로 켜거나, 시간을 바꾸거나, 끔 (newTime이 null이면 알람 끄기).
-   기간 일정/반복 일정은 등록할 때처럼 같은 묶음의 모든 날짜에 똑같이 적용함.
-   시간을 바꾸면 "이미 울렸음" 표시도 지워서 새 시간에 다시 울리게 함. */
-function applyMemoAlarm(key, idx, newTime) {
-  const item = memos[key] && memos[key][idx];
-  if (!item) return;
-  const setAlarm = (it) => {
-    if (newTime) {
-      if (it.alarmTime !== newTime) it.alarmFired = false;
-      it.alarmTime = newTime;
-    } else {
-      it.alarmTime = null;
-      it.alarmFired = false;
-    }
-  };
-  if (item.groupId || item.repeatId) {
-    Object.keys(memos).forEach((k) => {
-      memos[k].forEach((it) => {
-        if ((item.groupId && it.groupId === item.groupId) || (item.repeatId && it.repeatId === item.repeatId)) setAlarm(it);
-      });
-    });
-  } else {
-    setAlarm(item);
-  }
-  saveMemos();
-  renderCalendar();
-  updateDdayWidget();
-  refreshMemoPopup(key, idx);
-  // 지금 바로 울려야 하는 시간이면(예: 이미 지난 시간으로 설정) 바로 확인
-  if (typeof checkAlarms === 'function' && (!DESKTOP || IS_WIDGET || DESKTOP.alarmHost)) checkAlarms();
-}
-
 function applyMemoTodoType(key, idx, makeTodo) {
   const item = memos[key][idx];
   if (item.groupId) {
@@ -4097,61 +3978,6 @@ function buildMemoItemCard(key, idx, refreshFn) {
     div.appendChild(wrap);
   });
   actions.appendChild(convertBtn);
-
-  // ⏰ 알람: 기존 일정에 알람 켜기 / 시간 바꾸기 / 끄기
-  const alarmBtn = document.createElement('button');
-  alarmBtn.type = 'button';
-  alarmBtn.textContent = item.alarmTime ? '⏰ ' + item.alarmTime : '⏰ 알람';
-  alarmBtn.title = item.alarmTime ? '알람 시간 바꾸기 / 끄기' : '이 일정에 알람 추가';
-  alarmBtn.addEventListener('click', () => {
-    const existing = div.querySelector('.memo-inline-editor-알람');
-    if (existing) { existing.remove(); return; }
-    closeInlineExtras();
-    const wrap = document.createElement('div');
-    wrap.className = 'memo-inline-editor memo-inline-editor-알람';
-    const msg = document.createElement('div');
-    msg.className = 'memo-convert-msg';
-    msg.textContent = item.alarmTime
-      ? `지금 ${item.alarmTime}에 알람이 맞춰져 있어요. 시간을 바꾸거나 끌 수 있어요.`
-      : '몇 시에 알람을 울릴까요?';
-    if (item.groupId || item.repeatId) msg.textContent += (item.groupId ? ' (기간의 모든 날짜에 적용돼요)' : ' (반복되는 모든 날짜에 적용돼요)');
-    wrap.appendChild(msg);
-    const field = document.createElement('input');
-    field.type = 'time';
-    field.className = 'memo-inline-editor-field';
-    field.value = item.alarmTime || '';
-    wrap.appendChild(field);
-    const actionsRow = document.createElement('div');
-    actionsRow.className = 'memo-inline-editor-actions';
-    const saveBtn = document.createElement('button');
-    saveBtn.type = 'button';
-    saveBtn.className = 'btn-inline-save';
-    saveBtn.textContent = item.alarmTime ? '시간 바꾸기' : '알람 켜기';
-    saveBtn.addEventListener('click', () => {
-      const t = normalizeAlarmTime(field.value);
-      if (!t) { alert('알람 시간을 골라주세요.'); return; }
-      applyMemoAlarm(key, idx, t);
-    });
-    actionsRow.appendChild(saveBtn);
-    if (item.alarmTime) {
-      const offBtn = document.createElement('button');
-      offBtn.type = 'button';
-      offBtn.className = 'btn-inline-cancel';
-      offBtn.textContent = '알람 끄기';
-      offBtn.addEventListener('click', () => applyMemoAlarm(key, idx, null));
-      actionsRow.appendChild(offBtn);
-    }
-    const cancelBtn = document.createElement('button');
-    cancelBtn.type = 'button';
-    cancelBtn.className = 'btn-inline-cancel';
-    cancelBtn.textContent = '취소';
-    cancelBtn.addEventListener('click', () => wrap.remove());
-    actionsRow.appendChild(cancelBtn);
-    wrap.appendChild(actionsRow);
-    div.appendChild(wrap);
-    field.focus();
-  });
-  actions.appendChild(alarmBtn);
 
   if (item.groupId) {
     const editPeriodBtn = document.createElement('button');
@@ -5274,6 +5100,8 @@ function switchAccount(acc) {
   memos = loadMemosFor(acc);
   loadFreeMemo(acc);
   loadQuoteMemo(acc);
+  checkMemoStore.load(acc);
+  installMemoStore.load(acc);
   updateQuoteMemoVisibility(acc);
   updateAccountButtons();
   document.getElementById('modalBg').classList.remove('show');
@@ -5284,70 +5112,11 @@ function switchAccount(acc) {
     renderOverview(overviewYear, curMonth);
   }
   scrollToMonth(curYear, curMonth, false);
-  // 탭을 바꾼 바로 그 순간이 새 탭의 알람 시각이면 기다리지 않고 바로 울리게
-  if (typeof checkAlarms === 'function' && (!DESKTOP || IS_WIDGET || DESKTOP.alarmHost)) checkAlarms();
-  // 안드로이드 앱은 지금 탭의 알람만 울리도록 알람 목록을 새 탭 것으로 바꿔줌
-  syncNativeAlarms();
 }
 document.querySelectorAll('.acc-card').forEach((btn) => {
   btn.addEventListener('click', () => switchAccount(btn.dataset.acc));
 });
 updateAccountButtons();
-
-/* [기존 일정 보호] 같은 컴퓨터에서 달력 창이 두 개 열려 있을 때(PC 위젯 + 큰 달력, 또는 브라우저 탭 두 개)
-   한쪽에서 일정을 추가/수정하면 다른 쪽도 그 내용을 바로 다시 읽어오게 함.
-   이게 없으면, 예전 내용을 들고 있던 다른 창이 나중에 저장할 때 방금 추가한 일정을 덮어써서 지워버릴 수 있음. */
-window.addEventListener('storage', (e) => {
-  if (!e.key || !e.key.startsWith('yearlyCalendar') || e.key === ACTIVE_ACCOUNT_KEY) return;
-  if (e.key === storageKeyFor(currentAccount)) {
-    memos = loadMemosFor(currentAccount);
-    // 열려있던 일정 팝업은 항목 위치가 바뀌었을 수 있으니 닫음 (일정 추가 창은 그대로 둠)
-    ['modalBg', 'itemBg'].forEach((id) => document.getElementById(id).classList.remove('show'));
-    renderCalendar();
-    updateDdayWidget();
-    if (viewMode === 'overview') renderOverview(overviewYear, curMonth);
-    else scrollToMonth(curYear, curMonth, false);
-  } else if (e.key === freeMemoKeyFor(currentAccount)) {
-    if (document.activeElement !== document.getElementById('freeMemoBox')) loadFreeMemo(currentAccount);
-  } else if (e.key === quoteMemoKeyFor(currentAccount)) {
-    if (document.activeElement !== document.getElementById('quoteMemoBox')) loadQuoteMemo(currentAccount);
-  }
-});
-
-/* ===== PC 위젯 모드 윗줄 버튼들 ===== */
-if (IS_WIDGET) {
-  const wd = ['일', '월', '화', '수', '목', '금', '토'][today.getDay()];
-  document.getElementById('wbarDate').textContent = `${today.getMonth() + 1}월 ${today.getDate()}일 (${wd})`;
-  document.getElementById('wbarAdd').addEventListener('click', () => {
-    openQuickAdd(keyOf(today.getFullYear(), today.getMonth(), today.getDate()), null, null);
-  });
-  document.getElementById('wbarOpen').addEventListener('click', () => {
-    if (DESKTOP && DESKTOP.openCalendar) DESKTOP.openCalendar();
-    else window.open(location.pathname, '_blank');
-  });
-  const hideBtn = document.getElementById('wbarHide');
-  if (DESKTOP && DESKTOP.hideWidget) hideBtn.addEventListener('click', () => DESKTOP.hideWidget());
-  else hideBtn.style.display = 'none';
-  // 위젯에서 "등록"을 눌렀을 때만 selectDate가 안내 메시지를 띄우도록 표시해둠
-  document.getElementById('addBtn').addEventListener('click', () => {
-    widgetJustAdded = true;
-    setTimeout(() => { widgetJustAdded = false; }, 0);
-  }, true);
-}
-
-/* PC 앱은 며칠씩 켜두는 경우가 많아서, 자정이 지나면 "오늘"이 바뀐 걸 반영하려고 새로고침함
-   (입력 중인 창이 열려 있으면 기다렸다가 다음 확인 때 새로고침) */
-if (DESKTOP || IS_WIDGET || ANDROID) {
-  const loadedDayKey = keyOf(today.getFullYear(), today.getMonth(), today.getDate());
-  setInterval(() => {
-    const n = new Date();
-    if (keyOf(n.getFullYear(), n.getMonth(), n.getDate()) === loadedDayKey) return;
-    if (document.querySelector('.modal-bg.show, .alarm-overlay.show')) return;
-    const focused = document.activeElement;
-    if (focused && (focused.isContentEditable || /^(INPUT|TEXTAREA)$/.test(focused.tagName))) return;
-    location.reload();
-  }, 60000);
-}
 
 /* PC 화면에서 실제 남는 세로 공간을 측정해 달력 칸 높이를 계산
    (모니터 해상도/브라우저 창 크기가 달라져도 항상 빈 여백 없이 꽉 차게) */
@@ -5509,27 +5278,9 @@ function renderSelectedAgenda() {
   }
 }
 
-let widgetJustAdded = false;
 function selectDate(dateKey) {
-  if (IS_WIDGET) {
-    // 위젯은 항상 오늘/내일/모레를 보여줌. 다른 날짜에 일정을 등록했으면 잠깐 안내만 띄움
-    const tk = keyOf(today.getFullYear(), today.getMonth(), today.getDate());
-    if (widgetJustAdded && dateKey !== tk) showWidgetToast('📌 ' + formatShortDate(dateKey) + ' 일정이 등록됐어요');
-    selectedDateKey = null;
-    renderSelectedAgenda();
-    return;
-  }
   selectedDateKey = dateKey;
   renderSelectedAgenda();
-}
-let widgetToastTimer = null;
-function showWidgetToast(msg) {
-  const el = document.getElementById('widgetToast');
-  if (!el) return;
-  el.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(widgetToastTimer);
-  widgetToastTimer = setTimeout(() => el.classList.remove('show'), 2500);
 }
 
 // 브라우저 창 크기가 모바일⇄PC 기준선(1100px)을 넘나들 때도 바로 반영되게 함
@@ -5561,210 +5312,43 @@ function playAlarmBeep() {
 function showNextAlarm() {
   if (alarmShowing || alarmQueue.length === 0) return;
   alarmShowing = true;
-  const { dateKey, timeStr, text, accLabel } = alarmQueue.shift();
-  document.getElementById('alarmOverlayTime').textContent = (accLabel ? accLabel + ' · ' : '') + formatShortDate(dateKey) + ' ' + timeStr;
+  const { dateKey, timeStr, text } = alarmQueue.shift();
+  document.getElementById('alarmOverlayTime').textContent = formatShortDate(dateKey) + ' ' + timeStr;
   document.getElementById('alarmOverlayText').textContent = text;
   document.getElementById('alarmOverlay').classList.add('show');
   playAlarmBeep();
-  // PC 앱이면 숨겨져 있던 위젯 창을 앞으로 띄우고 윈도우 알림도 보냄
-  if (DESKTOP && DESKTOP.alarm) {
-    try { DESKTOP.alarm({ title: '⏰ ' + (accLabel ? accLabel + ' · ' : '') + timeStr, body: text }); } catch (e) { /* 무시 */ }
-  }
 }
 document.getElementById('alarmOverlayClose').addEventListener('click', () => {
   document.getElementById('alarmOverlay').classList.remove('show');
   alarmShowing = false;
   showNextAlarm();
-  if (!alarmShowing && reloadPendingAfterAlarm) location.reload();
 });
-
-/* 알람은 지금 켜놓은 탭(졸린곰 또는 고민곰)의 것만 울림 */
-const ALARM_ACCOUNTS = { '1': '💤 졸린곰', '2': '💭 고민곰' };
-
-/* "이 기기에서 이미 울린 알람" 기록 - 기기마다 따로 보관하고 클라우드로는 올리지 않음
-   (이름이 yearlyCalendar로 시작하지 않아서 동기화 대상이 아님).
-   예전에는 한 기기에서 울리면 "울렸음"이 동기화돼서 다른 기기에서는 안 울렸는데,
-   이제는 PC와 폰이 둘 다 켜져 있으면 둘 다 울림. */
-const ALARM_RANG_KEY = 'dadameunAlarmRang';
-function loadAlarmRang(dayKey) {
-  try {
-    const o = JSON.parse(localStorage.getItem(ALARM_RANG_KEY) || '{}');
-    if (o.day === dayKey && o.rang) return o;
-  } catch (e) { /* 무시 */ }
-  return { day: dayKey, rang: {} }; // 날짜가 바뀌면 새로 시작
-}
-function saveAlarmRang(o) {
-  try { localStorage.setItem(ALARM_RANG_KEY, JSON.stringify(o)); } catch (e) { /* 무시 */ }
-}
-function alarmItemId(acc, it) {
-  return [acc, it.alarmTime, it.order || 0, it.groupId || '', it.text || ''].join('|');
-}
-function hmToMinutes(hm) {
-  const [h, m] = String(hm).split(':').map(Number);
-  return h * 60 + m;
-}
-
-/* ===== 안드로이드 앱 알람 연결 =====
-   웹페이지는 앱이 꺼져 있으면 알람을 울릴 수 없어서, 지금 탭(졸린곰/고민곰)의 앞으로 울릴 알람 목록을
-   안드로이드 앱에 넘겨주면 앱이 휴대폰 알람 기능으로 정확한 시각에 알림을 울려줌.
-   (일정 데이터 자체는 앱에 따로 저장하지 않고, 알람 시각/제목만 넘김) */
-function syncNativeAlarms() {
-  if (!ANDROID) return;
-  try {
-    const list = [];
-    const nowMs = Date.now();
-    const base = new Date();
-    base.setHours(0, 0, 0, 0);
-    for (let i = 0; i < 62 && list.length < 200; i++) {
-      const d = new Date(base);
-      d.setDate(base.getDate() + i);
-      const k = keyOf(d.getFullYear(), d.getMonth(), d.getDate());
-      (memos[k] || []).forEach((it) => {
-        if (!it || typeof it !== 'object' || !it.alarmTime || list.length >= 200) return;
-        const [h, m] = String(it.alarmTime).split(':').map(Number);
-        const at = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m, 0, 0).getTime();
-        if (!(at > nowMs)) return;
-        list.push({
-          key: k + '#' + alarmItemId(currentAccount, it),
-          at,
-          title: '⏰ ' + it.alarmTime + (it.title ? ' ' + it.title : ''),
-          body: it.text || it.title || ''
-        });
-      });
-    }
-    ANDROID.syncAlarms(JSON.stringify(list));
-  } catch (e) { console.warn('앱 알람 전달 실패', e); }
-  syncNativeWidget();
-}
-/* 안드로이드 홈 화면 위젯에 보여줄 일정(지금 탭의 오늘부터 8일치)을 앱에 넘겨줌.
-   8일치를 넘겨두면 자정이 지나도 앱을 안 열고 위젯이 다음 날 일정을 바로 보여줄 수 있음. */
-function syncNativeWidget() {
-  if (!ANDROID || typeof ANDROID.syncWidget !== 'function') return;
-  try {
-    const base = new Date();
-    base.setHours(0, 0, 0, 0);
-    const days = [];
-    for (let i = 0; i < 8; i++) {
-      const d = new Date(base);
-      d.setDate(base.getDate() + i);
-      const k = keyOf(d.getFullYear(), d.getMonth(), d.getDate());
-      const items = (memos[k] || [])
-        .filter((it) => it && typeof it === 'object')
-        .slice()
-        .sort((a, b) => (a.order || 0) - (b.order || 0))
-        .slice(0, 12)
-        .map((it) => ({
-          t: (it.isTodo ? (it.done ? '☑ ' : '☐ ') : '') + (it.alarmTime ? '⏰ ' + it.alarmTime + ' ' : '') + previewLabel(it),
-          c: it.color || '',
-          b: it.bgColor || '',
-          done: !!(it.isTodo && it.done)
-        }));
-      days.push({ date: k, items });
-    }
-    const accNames = { '1': '💤 졸린곰', '2': '💭 고민곰' };
-    ANDROID.syncWidget(JSON.stringify({ acc: accNames[currentAccount] || '', days }));
-  } catch (e) { console.warn('위젯 전달 실패', e); }
-}
-function getNativeFiredSet() {
-  if (!ANDROID || typeof ANDROID.getFiredIds !== 'function') return new Set();
-  try { return new Set(JSON.parse(ANDROID.getFiredIds() || '[]')); } catch (e) { return new Set(); }
-}
 
 function checkAlarms() {
   const now = new Date();
   const k = keyOf(now.getFullYear(), now.getMonth(), now.getDate());
+  const items = memos[k];
+  if (!items || items.length === 0) return;
   const nowHM = pad(now.getHours()) + ':' + pad(now.getMinutes());
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const rangLog = loadAlarmRang(k);
-  const nativeFired = getNativeFiredSet();
-  let anyFired = false;
-  let rangChanged = false;
-  Object.keys(ALARM_ACCOUNTS).forEach((acc) => {
-    const isCurrent = acc === currentAccount;
-    // 지금 탭은 화면에 떠 있는 데이터(memos)를, 다른 탭은 저장된 데이터를 읽어서 확인
-    const accMemos = isCurrent ? memos : loadMemosFor(acc);
-    const items = accMemos[k];
-    if (!items || items.length === 0) return;
-    if (!isCurrent) {
-      // 알람은 지금 켜놓은 탭(졸린곰/고민곰)의 것만 울림.
-      // 다른 탭의 알람 시간이 지나가면 이 기기에서는 "지나감"으로만 조용히 표시해둠
-      // → 나중에 그 탭으로 바꿨을 때 지난 알람들이 한꺼번에 울리지 않게.
-      items.forEach((it) => {
-        if (!it.alarmTime || it.alarmTime > nowHM) return;
-        const id = alarmItemId(acc, it);
-        if (!rangLog.rang[id]) { rangLog.rang[id] = true; rangChanged = true; }
-      });
-      return;
-    }
-    let changed = false;
-    items.forEach((it) => {
-      if (!it.alarmTime || it.alarmTime > nowHM) return;
-      const id = alarmItemId(acc, it);
-      if (rangLog.rang[id]) return; // 이 기기에서는 이미 울림
-      if (nativeFired.has(k + '#' + id)) {
-        // 앱이 꺼져 있는 동안 안드로이드 앱이 이미 알림으로 울려줬음 → 화면에서 또 울리지 않음
-        rangLog.rang[id] = true;
-        rangChanged = true;
-        if (!it.alarmFired) { it.alarmFired = true; changed = true; }
-        return;
-      }
-      // 아직 아무 기기에서도 안 울린 알람이면(컴퓨터가 꺼져 있었던 경우 등) 늦게라도 울림.
-      // 다른 기기에서 이미 울린 알람이면, 거의 같은 때(10분 이내)일 때만 여기서도 울림
-      // → 저녁에 폰을 열었을 때 아침에 PC에서 울렸던 알람들이 한꺼번에 또 울리지 않게.
-      const recent = nowMin - hmToMinutes(it.alarmTime) <= 10;
-      rangLog.rang[id] = true;
-      rangChanged = true;
-      if (it.alarmFired && !recent) return;
-      if (!it.alarmFired) {
-        it.alarmFired = true;
-        changed = true;
-      }
-      const accLabel = isCurrent ? '' : ALARM_ACCOUNTS[acc];
-      alarmQueue.push({ dateKey: k, timeStr: it.alarmTime, text: it.text, accLabel });
-      anyFired = true;
-      // PC 앱은 앱 쪽에서 윈도우 알림을 보내므로, 브라우저 알림은 웹에서만
-      if (!DESKTOP && window.Notification && Notification.permission === 'granted') {
-        try { new Notification('⏰ ' + (accLabel ? accLabel + ' · ' : '') + it.text, { body: k + ' ' + it.alarmTime }); } catch (e) { /* 무시 */ }
-      }
-    });
-    if (changed) {
-      if (isCurrent) {
-        saveMemos();
-      } else {
-        localStorage.setItem(storageKeyFor(acc), JSON.stringify(accMemos));
-        pushToCloud();
+  let changed = false;
+  items.forEach((it) => {
+    if (it.alarmTime && !it.alarmFired && it.alarmTime <= nowHM) {
+      it.alarmFired = true;
+      changed = true;
+      alarmQueue.push({ dateKey: k, timeStr: it.alarmTime, text: it.text });
+      if (window.Notification && Notification.permission === 'granted') {
+        try { new Notification('⏰ ' + it.text, { body: k + ' ' + it.alarmTime }); } catch (e) { /* 무시 */ }
       }
     }
   });
-  if (rangChanged) saveAlarmRang(rangLog);
-  if (anyFired) {
+  if (changed) {
+    saveMemos();
     renderCalendar();
     showNextAlarm();
   }
 }
-/* PC 앱 안에서는 알람이 두 번 울리지 않도록, 앱이 "알람 담당"으로 정해준 창(alarmHost)이나
-   위젯 창에서만 알람을 확인함. 웹/모바일은 기존과 동일.
-   알람은 "몇 시 몇 분" 단위라서, 매 분 정각(00초)에 맞춰 확인해서 그 시각이 되자마자 바로 울림.
-   (혹시 컴퓨터가 잠깐 바빠서 정각 확인이 밀려도 놓치지 않도록 15초마다 한 번씩 더 확인) */
-if (!DESKTOP || IS_WIDGET || DESKTOP.alarmHost) {
-  const scheduleMinuteTick = () => {
-    const n = new Date();
-    const msToNextMinute = 60000 - (n.getSeconds() * 1000 + n.getMilliseconds()) + 150;
-    setTimeout(() => { checkAlarms(); scheduleMinuteTick(); }, msToNextMinute);
-  };
-  scheduleMinuteTick();
-  setInterval(checkAlarms, 15000);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') checkAlarms();
-  });
-  checkAlarms();
-}
-syncNativeAlarms();
-// 안드로이드 앱이 백그라운드에서 다시 화면으로 돌아왔을 때 앱이 불러줌
-window.__onNativeResume = () => {
-  if (!DESKTOP || IS_WIDGET || DESKTOP.alarmHost) checkAlarms();
-  syncNativeAlarms();
-};
+setInterval(checkAlarms, 30000);
+checkAlarms();
 updateDdayWidget();
 
 (function showBannerTodayDate() {
