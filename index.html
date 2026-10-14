@@ -1617,6 +1617,34 @@
     content: attr(data-placeholder);
     color: #9fb8c4;
   }
+  /* 메모에서 글자를 드래그로 선택하면 바로 아래에 뜨는 글자색 고르기 막대 */
+  .memo-color-bar {
+    position: fixed;
+    z-index: 1400;
+    display: none;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 300px;
+    max-width: calc(100vw - 16px);
+    box-sizing: border-box;
+    padding: 8px 10px;
+    background: #fff;
+    border: 1px solid #d6e2ea;
+    border-radius: 12px;
+    box-shadow: 0 6px 18px rgba(40, 70, 90, 0.18);
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  .memo-color-bar.show { display: flex; }
+  .memo-color-bar .mcb-label {
+    width: 100%;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #4a7a92;
+  }
+  .memo-color-bar .swatch { width: 24px; flex: 0 0 24px; }
+  .memo-color-bar .swatch-default { background: #33505f; }
   .memo-box img {
     max-width: 100%;
     border-radius: 8px;
@@ -2657,6 +2685,119 @@ loadQuoteMemo(currentAccount);
 updateQuoteMemoVisibility(currentAccount);
 attachMemoBoxHandlers('freeMemoBox', saveFreeMemo);
 attachMemoBoxHandlers('quoteMemoBox', saveQuoteMemo);
+
+/* ===== 메모 글자색 바꾸기 =====
+   메모(또는 견적서&제안서) 칸에서 글자를 드래그해서 선택하면 바로 아래에 색 고르기 막대가 뜸.
+   색을 누르면 선택한 글자만 그 색으로 바뀌고, 메모는 원래처럼 저장/동기화됨.
+   (PC: 마우스로 드래그 / 휴대폰: 글자를 꾹 눌러 선택한 뒤 손잡이로 범위 조절) */
+(function setupMemoColorBar() {
+  const MEMO_BOXES = { freeMemoBox: saveFreeMemo, quoteMemoBox: saveQuoteMemo };
+  const DEFAULT_TEXT_COLOR = '#33505f'; // 메모 기본 글자색
+  const COLORS = [
+    ['', '기본색'], ['#e06565', '빨강'], ['#c2255c', '자주'], ['#ff8c69', '산호'], ['#f4a83a', '주황'],
+    ['#ffd23c', '노랑'], ['#b5a642', '카키'], ['#7a8b3f', '올리브'], ['#5fbf7a', '초록'], ['#a8d94f', '라임'],
+    ['#4fd1c5', '민트'], ['#22c1c3', '시안'], ['#6ec3e8', '하늘'], ['#3d8fc0', '파랑'], ['#3b5bdb', '남색'],
+    ['#5b4fc7', '인디고'], ['#a880e0', '보라'], ['#b8a9e3', '라벤더'], ['#e07fb8', '분홍'], ['#a67c52', '갈색'],
+    ['#8a95a0', '회색'], ['#4a4a4a', '검정']
+  ];
+
+  const bar = document.createElement('div');
+  bar.className = 'memo-color-bar';
+  bar.id = 'memoColorBar';
+  const label = document.createElement('div');
+  label.className = 'mcb-label';
+  label.textContent = '🎨 선택한 글자 색 바꾸기';
+  bar.appendChild(label);
+  COLORS.forEach(([color, name]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'swatch' + (color ? '' : ' swatch-default');
+    if (color) b.style.background = color;
+    b.title = name;
+    b.dataset.color = color;
+    bar.appendChild(b);
+  });
+  document.body.appendChild(bar);
+
+  let savedRange = null;
+  let activeBoxId = null;
+  let updateTimer = null;
+  const isTouch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+
+  // 지금 선택된 글자가 메모 칸 안에 있는지
+  function selectionInMemo() {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+    const range = sel.getRangeAt(0);
+    if (!range.toString().trim()) return null;
+    for (const id of Object.keys(MEMO_BOXES)) {
+      const box = document.getElementById(id);
+      if (box && box.contains(range.commonAncestorContainer)) return { id, range };
+    }
+    return null;
+  }
+
+  function hideBar() {
+    bar.classList.remove('show');
+  }
+
+  function placeBar(range) {
+    const rect = range.getBoundingClientRect();
+    bar.classList.add('show');
+    const bw = bar.offsetWidth;
+    const bh = bar.offsetHeight;
+    // 휴대폰은 선택 손잡이가 글자 바로 아래에 생겨서 조금 더 아래에 띄움
+    const gap = isTouch ? 30 : 10;
+    let left = rect.left + rect.width / 2 - bw / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - bw - 8));
+    let top = rect.bottom + gap;
+    if (top + bh > window.innerHeight - 8) top = rect.top - bh - 10; // 아래 공간이 없으면 위로
+    top = Math.max(8, top);
+    bar.style.left = left + 'px';
+    bar.style.top = top + 'px';
+  }
+
+  function refreshBar() {
+    const hit = selectionInMemo();
+    if (!hit) { hideBar(); return; }
+    savedRange = hit.range.cloneRange();
+    activeBoxId = hit.id;
+    placeBar(hit.range);
+  }
+
+  document.addEventListener('selectionchange', () => {
+    clearTimeout(updateTimer);
+    updateTimer = setTimeout(refreshBar, 120);
+  });
+  // 스크롤하면 막대도 선택한 글자를 따라감
+  window.addEventListener('scroll', () => {
+    if (bar.classList.contains('show') && savedRange) placeBar(savedRange);
+  }, true);
+  window.addEventListener('resize', hideBar);
+
+  function applyColor(color) {
+    const box = document.getElementById(activeBoxId);
+    if (!box || !savedRange) return;
+    const sel = window.getSelection();
+    box.focus({ preventScroll: true });
+    sel.removeAllRanges();
+    sel.addRange(savedRange);
+    try { document.execCommand('styleWithCSS', false, true); } catch (e) { /* 무시 */ }
+    document.execCommand('foreColor', false, color || DEFAULT_TEXT_COLOR);
+    MEMO_BOXES[activeBoxId]();
+    // 선택은 그대로 둬서 다른 색으로 바로 다시 바꿀 수 있게 함
+    if (sel.rangeCount) savedRange = sel.getRangeAt(0).cloneRange();
+  }
+
+  // 색을 누를 때 메모의 글자 선택이 풀리지 않도록, 누르는 순간 바로 처리
+  bar.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    const btn = e.target.closest('.swatch');
+    if (btn) applyColor(btn.dataset.color);
+  });
+  bar.addEventListener('mousedown', (e) => e.preventDefault());
+  bar.addEventListener('click', (e) => e.preventDefault());
+})();
 
 /* 일정 순서(위/아래, 기간 막대 쌓임 순서)를 사용자가 임의로 바꿀 수 있도록
    각 항목에 order(숫자, 작을수록 위/먼저) 값을 부여해서 관리함.
@@ -5493,6 +5634,36 @@ function syncNativeAlarms() {
     }
     ANDROID.syncAlarms(JSON.stringify(list));
   } catch (e) { console.warn('앱 알람 전달 실패', e); }
+  syncNativeWidget();
+}
+/* 안드로이드 홈 화면 위젯에 보여줄 일정(지금 탭의 오늘부터 8일치)을 앱에 넘겨줌.
+   8일치를 넘겨두면 자정이 지나도 앱을 안 열고 위젯이 다음 날 일정을 바로 보여줄 수 있음. */
+function syncNativeWidget() {
+  if (!ANDROID || typeof ANDROID.syncWidget !== 'function') return;
+  try {
+    const base = new Date();
+    base.setHours(0, 0, 0, 0);
+    const days = [];
+    for (let i = 0; i < 8; i++) {
+      const d = new Date(base);
+      d.setDate(base.getDate() + i);
+      const k = keyOf(d.getFullYear(), d.getMonth(), d.getDate());
+      const items = (memos[k] || [])
+        .filter((it) => it && typeof it === 'object')
+        .slice()
+        .sort((a, b) => (a.order || 0) - (b.order || 0))
+        .slice(0, 12)
+        .map((it) => ({
+          t: (it.isTodo ? (it.done ? '☑ ' : '☐ ') : '') + (it.alarmTime ? '⏰ ' + it.alarmTime + ' ' : '') + previewLabel(it),
+          c: it.color || '',
+          b: it.bgColor || '',
+          done: !!(it.isTodo && it.done)
+        }));
+      days.push({ date: k, items });
+    }
+    const accNames = { '1': '💤 졸린곰', '2': '💭 고민곰' };
+    ANDROID.syncWidget(JSON.stringify({ acc: accNames[currentAccount] || '', days }));
+  } catch (e) { console.warn('위젯 전달 실패', e); }
 }
 function getNativeFiredSet() {
   if (!ANDROID || typeof ANDROID.getFiredIds !== 'function') return new Set();
