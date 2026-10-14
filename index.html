@@ -1633,33 +1633,22 @@
     min-height: 0;
     max-height: none;
   }
-  .memo-color-bar {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    flex-wrap: wrap;
-    margin-bottom: 6px;
-    flex-shrink: 0;
+  .memo-color-popup {
+    position: fixed; z-index: 9999; display: none;
+    align-items: center; gap: 6px;
+    background: #fff; border-radius: 22px; padding: 6px 10px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.22), 0 0 0 1px #cfdbe3;
+    -webkit-user-select: none; user-select: none;
   }
-  .memo-color-bar .mc-label { font-size: 11px; color: #7fa3b8; margin-right: 2px; }
-  .memo-color-bar .mc-swatch {
-    width: 22px; height: 22px;
-    border-radius: 50%;
-    border: 2px solid #fff;
-    box-shadow: 0 0 0 1px #cfdbe3;
-    padding: 0;
-    cursor: pointer;
-    flex-shrink: 0;
+  .memo-color-popup.show { display: flex; }
+  .memo-color-popup .mc-swatch {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 2px solid #fff; box-shadow: 0 0 0 1px #cfdbe3;
+    padding: 0; cursor: pointer; flex-shrink: 0;
   }
-  .memo-color-bar .mc-swatch.mc-default {
-    background: #fff;
-    color: #33505f;
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 18px;
-    width: auto;
-    border-radius: 11px;
-    padding: 0 7px;
+  .memo-color-popup .mc-swatch.mc-default {
+    background: #fff; color: #33505f; font-size: 11px; font-weight: 700;
+    width: auto; border-radius: 13px; padding: 0 8px; line-height: 22px;
   }
   .memo-box {
     min-height: 120px;
@@ -2024,7 +2013,6 @@
   <div id="todayAgenda"></div>
   <div class="memo-freebox-wrap" id="checkMemoWrap" style="display:none;">
     <div class="memo-freebox-title">✅ Check</div>
-    <div class="memo-color-bar" data-for="checkMemoBox"></div>
     <div class="memo-box" id="checkMemoBox" contenteditable="true" data-placeholder="Check 메모를 입력하세요..."></div>
   </div>
 </div>
@@ -2050,18 +2038,15 @@
   <div class="dday-widget" id="ddayWidget" style="display:none;"></div>
   <div class="memo-freebox-wrap" id="installMemoWrap" style="display:none;">
     <div class="memo-freebox-title">❗ 설치확인기간</div>
-    <div class="memo-color-bar" data-for="installMemoBox"></div>
     <div class="memo-box" id="installMemoBox" contenteditable="true" data-placeholder="설치확인기간을 입력하세요..."></div>
   </div>
   <div class="memo-splitter" id="memoSplitter" title="위아래로 끌어서 크기 조절 (더블클릭: 원래대로)"></div>
   <div class="memo-freebox-wrap">
     <div class="memo-freebox-title">📝 메모</div>
-    <div class="memo-color-bar" data-for="freeMemoBox"></div>
     <div class="memo-box" id="freeMemoBox" contenteditable="true" data-placeholder="메모를 입력하세요..."></div>
   </div>
   <div class="memo-freebox-wrap" id="quoteMemoWrap" style="display:none;">
     <div class="memo-freebox-title">📑 견적서 &amp; 제안서</div>
-    <div class="memo-color-bar" data-for="quoteMemoBox"></div>
     <div class="memo-box" id="quoteMemoBox" contenteditable="true" data-placeholder="견적서 및 제안서 내용을 입력하세요..."></div>
   </div>
 </div>
@@ -2599,54 +2584,95 @@ function attachMemoBoxHandlers(boxId, saveFn) {
   });
 }
 
-/* 메모 글씨 색상: 글자를 드래그해서 선택한 뒤 색 동그라미를 누르면 선택한 글자만 색이 바뀜.
+/* 메모 글씨 색상: 메모칸에서 글자를 선택하면 선택한 글자 근처에 색 팔레트가 떠서, 누르면 선택한 글자만 색이 바뀜.
    (모바일은 버튼을 누르는 순간 선택이 풀릴 수 있어서, 마지막 선택 범위를 기억해뒀다가 되살려 적용함) */
 const MEMO_TEXT_COLORS = ['#e03131', '#f08c00', '#2f9e44', '#1c7ed6', '#7048e8', '#d6336c', '#868e96'];
 const MEMO_DEFAULT_TEXT_COLOR = '#33505f';
-function setupMemoColorBar(boxId, saveFn) {
-  const box = document.getElementById(boxId);
-  const bar = document.querySelector('.memo-color-bar[data-for="' + boxId + '"]');
-  if (!box || !bar) return;
-  let savedRange = null;
-  document.addEventListener('selectionchange', () => {
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
-    if (box.contains(sel.anchorNode) && box.contains(sel.focusNode)) {
-      savedRange = sel.getRangeAt(0).cloneRange();
-    }
-  });
-  function applyColor(color) {
-    if (!savedRange) return;
-    box.focus();
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(savedRange);
-    document.execCommand('styleWithCSS', false, true);
-    document.execCommand('foreColor', false, color);
-    saveFn();
-  }
-  const label = document.createElement('span');
-  label.className = 'mc-label';
-  label.textContent = '글자색';
-  bar.appendChild(label);
-  MEMO_TEXT_COLORS.forEach((c) => {
+const memoColorBoxes = []; // {box, saveFn}
+let memoColorPopup = null, memoColorActive = null, memoColorRange = null, memoColorHideTimer = null;
+function ensureMemoColorPopup() {
+  if (memoColorPopup) return memoColorPopup;
+  const pop = document.createElement('div');
+  pop.className = 'memo-color-popup';
+  const keep = (e) => { e.preventDefault(); };
+  ['mousedown', 'pointerdown', 'touchstart'].forEach((ev) => pop.addEventListener(ev, keep, { passive: false }));
+  const mk = (cls, color, text) => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'mc-swatch';
-    b.style.background = c;
-    b.title = '선택한 글씨를 이 색으로';
-    b.addEventListener('mousedown', (e) => e.preventDefault());
-    b.addEventListener('click', () => applyColor(c));
-    bar.appendChild(b);
-  });
-  const def = document.createElement('button');
-  def.type = 'button';
-  def.className = 'mc-swatch mc-default';
-  def.textContent = '기본';
-  def.title = '선택한 글씨를 기본 색으로';
-  def.addEventListener('mousedown', (e) => e.preventDefault());
-  def.addEventListener('click', () => applyColor(MEMO_DEFAULT_TEXT_COLOR));
-  bar.appendChild(def);
+    b.className = 'mc-swatch' + (cls ? ' ' + cls : '');
+    if (text) b.textContent = text; else b.style.background = color;
+    b.title = text ? '선택한 글씨를 기본 색으로' : '선택한 글씨를 이 색으로';
+    b.addEventListener('click', () => applyMemoColor(color));
+    pop.appendChild(b);
+  };
+  MEMO_TEXT_COLORS.forEach((c) => mk('', c));
+  mk('mc-default', MEMO_DEFAULT_TEXT_COLOR, '기본');
+  document.body.appendChild(pop);
+  memoColorPopup = pop;
+  return pop;
+}
+function hideMemoColorPopup() { if (memoColorPopup) memoColorPopup.classList.remove('show'); }
+function applyMemoColor(color) {
+  if (!memoColorActive || !memoColorRange) return;
+  memoColorActive.box.focus();
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(memoColorRange);
+  document.execCommand('styleWithCSS', false, true);
+  document.execCommand('foreColor', false, color);
+  memoColorActive.saveFn();
+  positionMemoColorPopup();
+}
+function positionMemoColorPopup() {
+  const sel = window.getSelection();
+  let rect = null;
+  if (sel && sel.rangeCount && !sel.isCollapsed) {
+    rect = sel.getRangeAt(0).getBoundingClientRect();
+  } else if (memoColorRange) {
+    rect = memoColorRange.getBoundingClientRect();
+  }
+  if (!rect || (!rect.width && !rect.height)) { hideMemoColorPopup(); return; }
+  const pop = ensureMemoColorPopup();
+  // 선택 영역이 메모칸 밖으로 스크롤돼 보이지 않으면 숨김
+  const br = memoColorActive.box.getBoundingClientRect();
+  if (rect.bottom < br.top || rect.top > br.bottom) { hideMemoColorPopup(); return; }
+  pop.classList.add('show');
+  const pw = pop.offsetWidth, ph = pop.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
+  // 모바일은 위쪽에 기본 선택 메뉴가 뜨므로 아래쪽에, 공간이 없으면 위쪽에
+  let top = rect.bottom + 10;
+  if (top + ph > vh - 6) top = rect.top - ph - 10;
+  if (top < 6) top = Math.min(Math.max(6, rect.bottom + 10), vh - ph - 6);
+  let left = rect.left + rect.width / 2 - pw / 2;
+  left = Math.max(6, Math.min(left, vw - pw - 6));
+  pop.style.top = top + 'px';
+  pop.style.left = left + 'px';
+}
+document.addEventListener('selectionchange', () => {
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount && !sel.isCollapsed) {
+    const found = memoColorBoxes.find((m) => m.box.contains(sel.anchorNode) && m.box.contains(sel.focusNode));
+    if (found) {
+      clearTimeout(memoColorHideTimer);
+      memoColorActive = found;
+      memoColorRange = sel.getRangeAt(0).cloneRange();
+      positionMemoColorPopup();
+      return;
+    }
+  }
+  // 선택이 풀림: 팔레트를 누르는 중일 수 있으니 잠깐 기다렸다가 숨김
+  clearTimeout(memoColorHideTimer);
+  memoColorHideTimer = setTimeout(() => {
+    const s2 = window.getSelection();
+    if (!s2 || s2.isCollapsed || !memoColorBoxes.some((m) => m.box.contains(s2.anchorNode))) hideMemoColorPopup();
+  }, 350);
+});
+window.addEventListener('resize', () => { if (memoColorPopup && memoColorPopup.classList.contains('show')) positionMemoColorPopup(); });
+document.addEventListener('scroll', () => { if (memoColorPopup && memoColorPopup.classList.contains('show')) positionMemoColorPopup(); }, true);
+function setupMemoColorBar(boxId, saveFn) {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  memoColorBoxes.push({ box, saveFn });
+  ensureMemoColorPopup();
 }
 
 loadFreeMemo(currentAccount);
