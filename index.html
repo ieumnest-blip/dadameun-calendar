@@ -1633,6 +1633,24 @@
     min-height: 0;
     max-height: none;
   }
+  /* ===== Check 체크리스트 ===== */
+  .check-list { display: flex; flex-direction: column; gap: 2px; }
+  .ck-row { display: flex; align-items: flex-start; gap: 6px; padding: 2px 0; }
+  .ck-row input[type=checkbox] { width: 18px; height: 18px; margin: 4px 0 0; flex-shrink: 0; accent-color: #3d8fc0; cursor: pointer; }
+  .ck-row.ck-blank input[type=checkbox] { opacity: .35; pointer-events: none; }
+  .ck-text {
+    flex: 1 1 auto; min-width: 0; border: none; outline: none; resize: none; overflow: hidden;
+    font: inherit; font-size: 14px; line-height: 1.5; color: #33505f; background: transparent; padding: 1px 0; height: 24px;
+  }
+  .ck-row.done .ck-text { text-decoration: line-through; color: #9fb8c4; }
+  .ck-text::placeholder { color: #9fb8c4; }
+  .ck-btn { border: none; background: transparent; cursor: pointer; font-size: 14px; padding: 2px 3px; flex-shrink: 0; opacity: .55; line-height: 1.5; }
+  .ck-btn:hover, .ck-btn.on { opacity: 1; }
+  .ck-alarm-line { display: flex; align-items: center; gap: 6px; padding: 0 0 4px 24px; font-size: 12px; color: #4a7996; flex-wrap: wrap; }
+  .ck-alarm-line input[type=datetime-local] { font-size: 12px; padding: 2px 4px; border: 1px solid #cfdbe3; border-radius: 6px; color: #33505f; }
+  .ck-alarm-line button { font-size: 11px; border: 1px solid #cfdbe3; background: #fff; border-radius: 6px; padding: 2px 7px; cursor: pointer; color: #33505f; }
+  .ck-alarm-tag { font-size: 11px; color: #3d8fc0; padding-left: 24px; }
+  .ck-alarm-tag.fired { color: #9fb8c4; }
   .memo-color-popup {
     position: fixed; z-index: 9999; display: none;
     align-items: center; gap: 6px;
@@ -2013,7 +2031,7 @@
   <div id="todayAgenda"></div>
   <div class="memo-freebox-wrap" id="checkMemoWrap" style="display:none;">
     <div class="memo-freebox-title">✅ Check</div>
-    <div class="memo-box" id="checkMemoBox" contenteditable="true" data-placeholder="Check 메모를 입력하세요..."></div>
+    <div class="memo-box check-list" id="checkMemoBox"></div>
   </div>
 </div>
 
@@ -2536,8 +2554,8 @@ function updateQuoteMemoVisibility(acc) {
     if (wrap) wrap.style.display = on ? 'flex' : 'none';
   };
   show('quoteMemoWrap', acc === '2');
-  // 졸린곰(계정1) 전용: 왼쪽 "Check" 메모칸, 오른쪽 "설치확인기간" 메모칸
-  show('checkMemoWrap', acc === '1');
+  // 왼쪽 "Check" 체크리스트는 두 계정 모두, 오른쪽 "설치확인기간"은 졸린곰(계정1) 전용
+  show('checkMemoWrap', true);
   show('installMemoWrap', acc === '1');
   const sp = document.getElementById('memoSplitter');
   if (sp) sp.classList.toggle('show', acc === '1');
@@ -2558,8 +2576,166 @@ function makeMemoBoxStore(boxId, keyPrefix) {
     }
   };
 }
-const checkMemoStore = makeMemoBoxStore('checkMemoBox', 'yearlyCalendarCheckMemo_acc');
 const installMemoStore = makeMemoBoxStore('installMemoBox', 'yearlyCalendarInstallMemo_acc');
+
+/* ===== Check 체크리스트: 내용을 쓰면 체크박스가 생기고, 줄마다 ⏰ 알람을 달 수 있음 (계정별 저장 + 클라우드 동기화) ===== */
+const CHECK_LIST_KEY = 'yearlyCalendarCheckList_acc';
+const checkListStore = (function () {
+  let items = [];     // {id, text, done, alarm: 'YYYY-MM-DDTHH:MM' | '', fired}
+  let alarmOpenId = null;
+  let focusReq = null; // {id|'blank', pos}
+  const box = () => document.getElementById('checkMemoBox');
+  const uid = () => 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  function save() {
+    localStorage.setItem(CHECK_LIST_KEY + currentAccount, JSON.stringify(items));
+    pushToCloud();
+  }
+  function load(acc) {
+    let raw = localStorage.getItem(CHECK_LIST_KEY + acc);
+    items = [];
+    if (raw) {
+      try { items = JSON.parse(raw) || []; } catch (e) { items = []; }
+    } else {
+      // 예전 Check 메모(글)가 있으면 줄마다 항목으로 옮겨줌
+      const old = localStorage.getItem('yearlyCalendarCheckMemo_acc' + acc);
+      if (old) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = old.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(div|p|li)>/gi, '\n');
+        (tmp.textContent || '').split('\n').map((t) => t.trim()).filter(Boolean)
+          .forEach((t) => items.push({ id: uid(), text: t, done: false, alarm: '', fired: false }));
+        if (items.length) { localStorage.setItem(CHECK_LIST_KEY + acc, JSON.stringify(items)); }
+      }
+    }
+    items = items.filter((x) => x && String(x.text || '').trim());
+    alarmOpenId = null;
+    render();
+  }
+  function fmtAlarm(a) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(a || '');
+    return m ? `${+m[2]}/${+m[3]} ${m[4]}:${m[5]}` : '';
+  }
+  function autoGrow(ta) { ta.style.height = '0px'; ta.style.height = Math.max(24, ta.scrollHeight) + 'px'; }
+  function makeRow(it, idx) {
+    const frag = document.createDocumentFragment();
+    const blank = !it;
+    const row = document.createElement('div');
+    row.className = 'ck-row' + (blank ? ' ck-blank' : '') + (it && it.done ? ' done' : '');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!(it && it.done);
+    cb.addEventListener('change', () => { it.done = cb.checked; row.classList.toggle('done', it.done); save(); });
+    const ta = document.createElement('textarea');
+    ta.className = 'ck-text';
+    ta.rows = 1;
+    ta.value = it ? it.text : '';
+    if (blank) ta.placeholder = '내용을 입력하고 Enter';
+    if (blank) ta.dataset.blank = '1'; else ta.dataset.id = it.id;
+    ta.addEventListener('input', () => {
+      autoGrow(ta);
+      if (blank) {
+        const t = ta.value.replace(/\n/g, '');
+        if (!t.trim()) return;
+        // 글을 쓰기 시작하면 항목(체크박스)이 생김
+        const n = { id: uid(), text: t, done: false, alarm: '', fired: false };
+        items.push(n);
+        save();
+        focusReq = { id: n.id, pos: t.length };
+        render();
+      } else {
+        it.text = ta.value.replace(/\n/g, '');
+        save();
+      }
+    });
+    ta.addEventListener('keydown', (e) => {
+      if (e.isComposing) return;
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (blank) return;
+        const n = { id: uid(), text: '', done: false, alarm: '', fired: false };
+        items.splice(idx + 1, 0, n);
+        // 빈 항목은 저장 시 제외되지 않도록 바로 다음 입력으로 이어짐
+        focusReq = { id: n.id, pos: 0 };
+        save(); render();
+      } else if (e.key === 'Backspace' && !blank && ta.value === '') {
+        e.preventDefault();
+        items.splice(idx, 1);
+        const prev = items[idx - 1];
+        focusReq = prev ? { id: prev.id, pos: prev.text.length } : { id: 'blank', pos: 0 };
+        save(); render();
+      }
+    });
+    row.appendChild(cb); row.appendChild(ta);
+    if (!blank) {
+      const bell = document.createElement('button');
+      bell.type = 'button';
+      bell.className = 'ck-btn' + (it.alarm ? ' on' : '');
+      bell.textContent = '⏰';
+      bell.title = '알람 설정';
+      bell.addEventListener('click', () => { alarmOpenId = alarmOpenId === it.id ? null : it.id; render(); });
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'ck-btn';
+      del.textContent = '✕';
+      del.title = '삭제';
+      del.addEventListener('click', () => { items.splice(idx, 1); save(); render(); });
+      row.appendChild(bell); row.appendChild(del);
+    }
+    frag.appendChild(row);
+    if (it && alarmOpenId === it.id) {
+      const line = document.createElement('div');
+      line.className = 'ck-alarm-line';
+      const dt = document.createElement('input');
+      dt.type = 'datetime-local';
+      dt.value = it.alarm || '';
+      const ok = document.createElement('button');
+      ok.type = 'button'; ok.textContent = '알람 저장';
+      ok.addEventListener('click', () => {
+        if (!dt.value) { alert('알람 날짜와 시간을 골라주세요.'); return; }
+        it.alarm = dt.value; it.fired = false;
+        alarmOpenId = null; save(); render();
+        if (window.Notification && Notification.permission === 'default') Notification.requestPermission();
+      });
+      const off = document.createElement('button');
+      off.type = 'button'; off.textContent = '알람 끄기';
+      off.addEventListener('click', () => { it.alarm = ''; it.fired = false; alarmOpenId = null; save(); render(); });
+      line.appendChild(dt); line.appendChild(ok); line.appendChild(off);
+      frag.appendChild(line);
+    } else if (it && it.alarm) {
+      const tag = document.createElement('div');
+      tag.className = 'ck-alarm-tag' + (it.fired ? ' fired' : '');
+      tag.textContent = '⏰ ' + fmtAlarm(it.alarm) + (it.fired ? ' (울림)' : '');
+      frag.appendChild(tag);
+    }
+    return frag;
+  }
+  function render() {
+    const b = box();
+    if (!b) return;
+    const keepTop = b.scrollTop;
+    b.innerHTML = '';
+    items.forEach((it, i) => b.appendChild(makeRow(it, i)));
+    b.appendChild(makeRow(null, items.length));
+    b.querySelectorAll('textarea').forEach(autoGrow);
+    b.scrollTop = keepTop;
+    if (focusReq) {
+      const ta = focusReq.id === 'blank' ? b.querySelector('textarea[data-blank]') : b.querySelector('textarea[data-id="' + focusReq.id + '"]');
+      focusReq = null;
+      if (ta) { ta.focus(); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {} }
+    }
+  }
+  // 알람 확인: 시간이 된(또는 지난) 항목을 한 번만 울림
+  function dueAlarms() {
+    const now = new Date();
+    const nowStr = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + 'T' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+    const out = [];
+    items.forEach((it) => {
+      if (it.alarm && !it.fired && it.text.trim() && it.alarm <= nowStr) { it.fired = true; out.push(it); }
+    });
+    if (out.length) { save(); render(); }
+    return out;
+  }
+  return { load, save, dueAlarms };
+})();
 
 function attachMemoBoxHandlers(boxId, saveFn) {
   const box = document.getElementById(boxId);
@@ -2677,16 +2853,14 @@ function setupMemoColorBar(boxId, saveFn) {
 
 loadFreeMemo(currentAccount);
 loadQuoteMemo(currentAccount);
-checkMemoStore.load(currentAccount);
+checkListStore.load(currentAccount);
 installMemoStore.load(currentAccount);
 updateQuoteMemoVisibility(currentAccount);
 attachMemoBoxHandlers('freeMemoBox', saveFreeMemo);
 attachMemoBoxHandlers('quoteMemoBox', saveQuoteMemo);
 setupMemoColorBar('freeMemoBox', saveFreeMemo);
 setupMemoColorBar('quoteMemoBox', saveQuoteMemo);
-attachMemoBoxHandlers('checkMemoBox', checkMemoStore.save);
 attachMemoBoxHandlers('installMemoBox', installMemoStore.save);
-setupMemoColorBar('checkMemoBox', checkMemoStore.save);
 setupMemoColorBar('installMemoBox', installMemoStore.save);
 
 /* "설치확인기간" 칸과 "메모" 칸 사이 손잡이를 위아래로 끌면 설치확인기간 칸 높이가 바뀌고,
@@ -5126,7 +5300,7 @@ function switchAccount(acc) {
   memos = loadMemosFor(acc);
   loadFreeMemo(acc);
   loadQuoteMemo(acc);
-  checkMemoStore.load(acc);
+  checkListStore.load(acc);
   installMemoStore.load(acc);
   updateQuoteMemoVisibility(acc);
   updateAccountButtons();
@@ -5373,8 +5547,19 @@ function checkAlarms() {
     showNextAlarm();
   }
 }
-setInterval(checkAlarms, 30000);
+function checkCheckListAlarms() {
+  checkListStore.dueAlarms().forEach((it) => {
+    const dateKey = it.alarm.slice(0, 10).split('-').map(Number);
+    alarmQueue.push({ dateKey: keyOf(dateKey[0], dateKey[1] - 1, dateKey[2]), timeStr: it.alarm.slice(11, 16), text: '✅ ' + it.text });
+    if (window.Notification && Notification.permission === 'granted') {
+      try { new Notification('⏰ ' + it.text, { body: 'Check ' + it.alarm.replace('T', ' ') }); } catch (e) { /* 무시 */ }
+    }
+  });
+  showNextAlarm();
+}
+setInterval(() => { checkAlarms(); checkCheckListAlarms(); }, 30000);
 checkAlarms();
+checkCheckListAlarms();
 updateDdayWidget();
 
 (function showBannerTodayDate() {
