@@ -2589,6 +2589,7 @@ const checkListStore = (function () {
   function save() {
     localStorage.setItem(CHECK_LIST_KEY + currentAccount, JSON.stringify(items));
     pushToCloud();
+    if (typeof syncNativeAlarms === 'function') syncNativeAlarms();
   }
   function load(acc) {
     let raw = localStorage.getItem(CHECK_LIST_KEY + acc);
@@ -2964,6 +2965,7 @@ let curMonth = today.getMonth(); // 0-indexed
 function saveMemos() {
   localStorage.setItem(storageKeyFor(currentAccount), JSON.stringify(memos));
   pushToCloud();
+  if (typeof syncNativeAlarms === 'function') syncNativeAlarms();
 }
 function pad(n) { return String(n).padStart(2, '0'); }
 /* 달력 칸에는 여러 줄 내용 중 첫 줄만 짧게 보여줌 (전체 내용은 왼쪽 패널/팝업에서 확인) */
@@ -5509,6 +5511,33 @@ function playAlarmBeep() {
   } catch (e) { /* 소리 재생 불가 시 무시 */ }
 }
 
+/* 시스템 알림: 다른 창에 있거나 최소화돼 있어도 보이고, 사용자가 닫을 때까지 남아 있도록(requireInteraction) 띄움 */
+function fireSystemNotification(title, body, tag) {
+  if (!(window.Notification && Notification.permission === 'granted')) return;
+  const opts = { body, tag, requireInteraction: true, renotify: true, vibrate: [300, 150, 300, 150, 300], icon: 'icon-192.png' };
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+      navigator.serviceWorker.ready.then((reg) => reg.showNotification(title, opts)).catch(() => {
+        try { new Notification(title, opts); } catch (e) { /* 무시 */ }
+      });
+      return;
+    }
+  } catch (e) { /* 아래로 */ }
+  try { new Notification(title, opts); } catch (e) { /* 무시 */ }
+}
+let alarmRepeatTimer = null, alarmTitleTimer = null;
+const ORIGINAL_TITLE = document.title;
+function startAlarmAttention() {
+  stopAlarmAttention();
+  alarmRepeatTimer = setInterval(playAlarmBeep, 5000);   // 확인 누를 때까지 5초마다 소리 반복
+  let on = false;
+  alarmTitleTimer = setInterval(() => { on = !on; document.title = on ? '⏰ 알람!' : ORIGINAL_TITLE; }, 1000);
+}
+function stopAlarmAttention() {
+  clearInterval(alarmRepeatTimer); clearInterval(alarmTitleTimer);
+  alarmRepeatTimer = alarmTitleTimer = null;
+  document.title = ORIGINAL_TITLE;
+}
 function showNextAlarm() {
   if (alarmShowing || alarmQueue.length === 0) return;
   alarmShowing = true;
@@ -5517,10 +5546,12 @@ function showNextAlarm() {
   document.getElementById('alarmOverlayText').textContent = text;
   document.getElementById('alarmOverlay').classList.add('show');
   playAlarmBeep();
+  startAlarmAttention();
 }
 document.getElementById('alarmOverlayClose').addEventListener('click', () => {
   document.getElementById('alarmOverlay').classList.remove('show');
   alarmShowing = false;
+  stopAlarmAttention();
   showNextAlarm();
 });
 
@@ -5536,9 +5567,7 @@ function checkAlarms() {
       it.alarmFired = true;
       changed = true;
       alarmQueue.push({ dateKey: k, timeStr: it.alarmTime, text: it.text });
-      if (window.Notification && Notification.permission === 'granted') {
-        try { new Notification('⏰ ' + it.text, { body: k + ' ' + it.alarmTime }); } catch (e) { /* 무시 */ }
-      }
+      fireSystemNotification('⏰ ' + it.text, k + ' ' + it.alarmTime, 'cal-' + k + '-' + it.alarmTime);
     }
   });
   if (changed) {
@@ -5547,19 +5576,68 @@ function checkAlarms() {
     showNextAlarm();
   }
 }
+/* ===== 안드로이드 앱 연동: 앱이 꺼져 있어도 울리도록, 앞으로 올 알람을 폰 알람(AlarmManager)에 등록 =====
+   (안드로이드 앱 안에서 열었을 때만 window.DadameunAndroid 가 있어서 동작. 웹/PC에서는 아무 일도 안 함) */
+let nativeSyncTimer = null;
+function buildNativeAlarmList() {
+  const list = [];
+  const nowMs = Date.now();
+  const accNames = { '1': '졸린곰', '2': '고민곰' };
+  ['1', '2'].forEach((acc) => {
+    // 달력 일정 알람
+    let m = {};
+    try { m = acc === currentAccount ? memos : loadMemosFor(acc); } catch (e) { m = {}; }
+    Object.keys(m || {}).forEach((dk) => {
+      (m[dk] || []).forEach((it) => {
+        if (!it || !it.alarmTime || it.alarmFired) return;
+        const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dk), tm = /^(\d{1,2}):(\d{2})$/.exec(it.alarmTime);
+        if (!dm || !tm) return;
+        const at = new Date(+dm[1], +dm[2] - 1, +dm[3], +tm[1], +tm[2]).getTime();
+        if (at <= nowMs) return;
+        const label = (it.title || it.text || '').split('\n')[0];
+        list.push({ at, key: 'cal|' + acc + '|' + dk + '|' + it.alarmTime + '|' + label.slice(0, 20), title: '⏰ ' + label, body: accNames[acc] + ' · ' + dk + ' ' + it.alarmTime });
+      });
+    });
+    // Check 체크리스트 알람
+    let cl = [];
+    try { cl = JSON.parse(localStorage.getItem(CHECK_LIST_KEY + acc) || '[]') || []; } catch (e) { cl = []; }
+    cl.forEach((it) => {
+      if (!it || !it.alarm || it.fired || !String(it.text || '').trim()) return;
+      const mm = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(it.alarm);
+      if (!mm) return;
+      const at = new Date(+mm[1], +mm[2] - 1, +mm[3], +mm[4], +mm[5]).getTime();
+      if (at <= nowMs) return;
+      list.push({ at, key: 'chk|' + acc + '|' + it.id, title: '⏰ ' + it.text, body: 'Check · ' + accNames[acc] + ' · ' + it.alarm.replace('T', ' ') });
+    });
+  });
+  list.sort((a, b) => a.at - b.at);
+  return list.slice(0, 60);
+}
+function syncNativeAlarms() {
+  if (!window.DadameunAndroid || typeof window.DadameunAndroid.syncAlarms !== 'function') return;
+  clearTimeout(nativeSyncTimer);
+  nativeSyncTimer = setTimeout(() => {
+    try { window.DadameunAndroid.syncAlarms(JSON.stringify(buildNativeAlarmList())); } catch (e) { /* 무시 */ }
+  }, 400);
+}
+window.__onNativeResume = function () { try { checkAlarms(); checkCheckListAlarms(); } catch (e) {} syncNativeAlarms(); };
+
 function checkCheckListAlarms() {
   checkListStore.dueAlarms().forEach((it) => {
     const dateKey = it.alarm.slice(0, 10).split('-').map(Number);
     alarmQueue.push({ dateKey: keyOf(dateKey[0], dateKey[1] - 1, dateKey[2]), timeStr: it.alarm.slice(11, 16), text: '✅ ' + it.text });
-    if (window.Notification && Notification.permission === 'granted') {
-      try { new Notification('⏰ ' + it.text, { body: 'Check ' + it.alarm.replace('T', ' ') }); } catch (e) { /* 무시 */ }
-    }
+    fireSystemNotification('⏰ ' + it.text, 'Check ' + it.alarm.replace('T', ' '), 'chk-' + it.id);
   });
   showNextAlarm();
 }
-setInterval(() => { checkAlarms(); checkCheckListAlarms(); }, 30000);
+setInterval(() => { checkAlarms(); checkCheckListAlarms(); }, 15000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { checkAlarms(); checkCheckListAlarms(); } });
 checkAlarms();
 checkCheckListAlarms();
+syncNativeAlarms();
+if (window.Notification && Notification.permission === 'default') {
+  document.addEventListener('click', function askNotifOnce() { document.removeEventListener('click', askNotifOnce); Notification.requestPermission(); }, { once: true });
+}
 updateDdayWidget();
 
 (function showBannerTodayDate() {
