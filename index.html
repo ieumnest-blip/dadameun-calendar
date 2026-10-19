@@ -1437,6 +1437,9 @@
     padding: 2px 4px;
   }
   .dday-widget-del:hover { color: #e06565; }
+  .dday-history { margin-top: 8px; padding-top: 8px; border-top: 1px solid #ffe3b0; }
+  .dday-history-title { font-size: 11px; color: #b5772f; font-weight: 700; margin-bottom: 4px; }
+  .dday-history-line { font-size: 12px; color: #7a6a52; line-height: 1.5; word-break: break-word; }
 
   .agenda-item {
     display: flex;
@@ -2583,6 +2586,7 @@ const CHECK_LIST_KEY = 'yearlyCalendarCheckList_acc';
 const checkListStore = (function () {
   let items = [];     // {id, text, done, alarm: 'YYYY-MM-DDTHH:MM' | '', fired}
   let alarmOpenId = null;
+  let dateOpenId = null;
   let focusReq = null; // {id|'blank', pos}
   const box = () => document.getElementById('checkMemoBox');
   const uid = () => 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -2611,6 +2615,33 @@ const checkListStore = (function () {
     alarmOpenId = null;
     render();
   }
+  // 날짜를 지정한 항목은 달력의 그 날짜에도 (할 일로) 기록됨. 달력 쪽에서 체크하면 여기도 같이 체크됨.
+  function syncToCalendar(it) {
+    let changed = false;
+    Object.keys(memos).forEach((k) => {
+      const before = memos[k].length;
+      memos[k] = memos[k].filter((m) => m.checkId !== it.id);
+      if (memos[k].length !== before) { changed = true; if (!memos[k].length) delete memos[k]; }
+    });
+    if (it.date && String(it.text || '').trim()) {
+      if (!memos[it.date]) memos[it.date] = [];
+      memos[it.date].push({ text: it.text, title: null, groupId: null, start: null, end: null, color: null, bgColor: null, isTodo: true, done: !!it.done, alarmTime: null, alarmFired: false, isDday: false, ddayTarget: null, image: null, order: nextOrder(), checkId: it.id });
+      changed = true;
+    }
+    if (changed) {
+      saveMemos();
+      try { renderCalendar(); renderSelectedAgenda(); } catch (e) { /* 무시 */ }
+    }
+  }
+  function setDone(id, done) {
+    const it = items.find((x) => x.id === id);
+    if (!it || it.done === done) return;
+    it.done = done; save(); render();
+  }
+  function fmtDate(d) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d || '');
+    return m ? `${+m[2]}/${+m[3]}` : '';
+  }
   function fmtAlarm(a) {
     const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(a || '');
     return m ? `${+m[2]}/${+m[3]} ${m[4]}:${m[5]}` : '';
@@ -2624,7 +2655,7 @@ const checkListStore = (function () {
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.checked = !!(it && it.done);
-    cb.addEventListener('change', () => { it.done = cb.checked; row.classList.toggle('done', it.done); save(); });
+    cb.addEventListener('change', () => { it.done = cb.checked; row.classList.toggle('done', it.done); save(); if (it.date) syncToCalendar(it); });
     const ta = document.createElement('textarea');
     ta.className = 'ck-text';
     ta.rows = 1;
@@ -2645,6 +2676,7 @@ const checkListStore = (function () {
       } else {
         it.text = ta.value.replace(/\n/g, '');
         save();
+        if (it.date) syncToCalendar(it);
       }
     });
     ta.addEventListener('keydown', (e) => {
@@ -2659,7 +2691,7 @@ const checkListStore = (function () {
         save(); render();
       } else if (e.key === 'Backspace' && !blank && ta.value === '') {
         e.preventDefault();
-        items.splice(idx, 1);
+        const gone = items.splice(idx, 1)[0]; if (gone && gone.date) { gone.date = ''; syncToCalendar(gone); }
         const prev = items[idx - 1];
         focusReq = prev ? { id: prev.id, pos: prev.text.length } : { id: 'blank', pos: 0 };
         save(); render();
@@ -2672,17 +2704,40 @@ const checkListStore = (function () {
       bell.className = 'ck-btn' + (it.alarm ? ' on' : '');
       bell.textContent = '⏰';
       bell.title = '알람 설정';
-      bell.addEventListener('click', () => { alarmOpenId = alarmOpenId === it.id ? null : it.id; render(); });
+      bell.addEventListener('click', () => { alarmOpenId = alarmOpenId === it.id ? null : it.id; dateOpenId = null; render(); });
+      const cal = document.createElement('button');
+      cal.type = 'button';
+      cal.className = 'ck-btn' + (it.date ? ' on' : '');
+      cal.textContent = '📅';
+      cal.title = '날짜 지정 (달력에 기록)';
+      cal.addEventListener('click', () => { dateOpenId = dateOpenId === it.id ? null : it.id; alarmOpenId = null; render(); });
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'ck-btn';
       del.textContent = '✕';
       del.title = '삭제';
-      del.addEventListener('click', () => { items.splice(idx, 1); save(); render(); });
-      row.appendChild(bell); row.appendChild(del);
+      del.addEventListener('click', () => { const gone = items.splice(idx, 1)[0]; if (gone && gone.date) { gone.date = ''; syncToCalendar(gone); } save(); render(); });
+      row.appendChild(cal); row.appendChild(bell); row.appendChild(del);
     }
     frag.appendChild(row);
-    if (it && alarmOpenId === it.id) {
+    if (it && dateOpenId === it.id) {
+      const line = document.createElement('div');
+      line.className = 'ck-alarm-line';
+      const dd = document.createElement('input');
+      dd.type = 'date';
+      dd.value = it.date || '';
+      const ok = document.createElement('button');
+      ok.type = 'button'; ok.textContent = '달력에 기록';
+      ok.addEventListener('click', () => {
+        if (!dd.value) { alert('날짜를 골라주세요.'); return; }
+        it.date = dd.value; dateOpenId = null; save(); syncToCalendar(it); render();
+      });
+      const off = document.createElement('button');
+      off.type = 'button'; off.textContent = '날짜 해제';
+      off.addEventListener('click', () => { it.date = ''; dateOpenId = null; save(); syncToCalendar(it); render(); });
+      line.appendChild(dd); line.appendChild(ok); line.appendChild(off);
+      frag.appendChild(line);
+    } else if (it && alarmOpenId === it.id) {
       const line = document.createElement('div');
       line.className = 'ck-alarm-line';
       const dt = document.createElement('input');
@@ -2701,10 +2756,10 @@ const checkListStore = (function () {
       off.addEventListener('click', () => { it.alarm = ''; it.fired = false; alarmOpenId = null; save(); render(); });
       line.appendChild(dt); line.appendChild(ok); line.appendChild(off);
       frag.appendChild(line);
-    } else if (it && it.alarm) {
+    } else if (it && (it.alarm || it.date)) {
       const tag = document.createElement('div');
-      tag.className = 'ck-alarm-tag' + (it.fired ? ' fired' : '');
-      tag.textContent = '⏰ ' + fmtAlarm(it.alarm) + (it.fired ? ' (울림)' : '');
+      tag.className = 'ck-alarm-tag' + (it.alarm && it.fired ? ' fired' : '');
+      tag.textContent = (it.date ? '📅 ' + fmtDate(it.date) + '  ' : '') + (it.alarm ? '⏰ ' + fmtAlarm(it.alarm) + (it.fired ? ' (울림)' : '') : '');
       frag.appendChild(tag);
     }
     return frag;
@@ -2735,7 +2790,7 @@ const checkListStore = (function () {
     if (out.length) { save(); render(); }
     return out;
   }
-  return { load, save, dueAlarms };
+  return { load, save, dueAlarms, setDone };
 })();
 
 function attachMemoBoxHandlers(boxId, saveFn) {
@@ -3658,12 +3713,16 @@ function moveRangeGroup(groupId, newStartKey, newEndKey) {
   if (s > e) { const tmp = s; s = e; e = tmp; }
   const startK = keyOf(s.getFullYear(), s.getMonth(), s.getDate());
   const endK = keyOf(e.getFullYear(), e.getMonth(), e.getDate());
+  let histForRange = rep.ddayHistory;
+  if (rep.isDday && rep.ddayTarget && rep.ddayTarget !== endK) {
+    histForRange = (rep.ddayHistory || []).concat([{ from: rep.ddayTarget, to: endK, at: Date.now() }]).slice(-20);
+  }
   const cur = new Date(s);
   let count = 0;
   while (cur <= e && count < 400) {
     const k = keyOf(cur.getFullYear(), cur.getMonth(), cur.getDate());
     if (!memos[k]) memos[k] = [];
-    memos[k].push({ ...rep, start: startK, end: endK, ddayTarget: rep.isDday ? endK : rep.ddayTarget });
+    memos[k].push({ ...rep, start: startK, end: endK, ddayTarget: rep.isDday ? endK : rep.ddayTarget, ddayHistory: histForRange });
     cur.setDate(cur.getDate() + 1);
     count++;
   }
@@ -3692,7 +3751,14 @@ function moveNormalItemToDate(key, idx, newKey) {
   if (!memos[newKey]) memos[newKey] = [];
   // 디데이 항목은 옮긴 날짜가 곧 디데이 기준일이므로, 칸을 옮기면 ddayTarget도 같이 옮겨줘야
   // 디데이 계산(D-16 등)이 새 날짜 기준으로 바뀜 (예전엔 칸만 옮기고 이 값은 그대로 남아있었음)
-  if (item.isDday) item.ddayTarget = newKey;
+  if (item.isDday) {
+    if (item.ddayTarget && item.ddayTarget !== newKey) {
+      if (!item.ddayHistory) item.ddayHistory = [];
+      item.ddayHistory.push({ from: item.ddayTarget, to: newKey, at: Date.now() });
+      if (item.ddayHistory.length > 20) item.ddayHistory = item.ddayHistory.slice(-20);
+    }
+    item.ddayTarget = newKey;
+  }
   memos[newKey].push(item);
   saveMemos();
   return newKey;
@@ -3903,6 +3969,7 @@ function toggleMemoTodoDone(key, idx, done) {
   saveMemos();
   renderCalendar();
   updateDdayWidget();
+  if (item.checkId) checkListStore.setDone(item.checkId, done);
 }
 
 function formatShortDate(key) {
@@ -3988,6 +4055,35 @@ function updateDdayWidget() {
     row.appendChild(delBtn);
     widget.appendChild(row);
   });
+
+  // 맨 아래: 디데이 날짜를 옮긴 기록 (어느 날짜 → 어느 날짜), 최근 것이 위
+  const hist = [];
+  const seen = new Set();
+  all.forEach(({ item }) => {
+    (item.ddayHistory || []).forEach((h) => {
+      const sig = (item.groupId || item.text) + '|' + h.at + '|' + h.from + '|' + h.to;
+      if (seen.has(sig)) return; // 기간 일정은 날짜마다 같은 기록이 복제돼 있어서 중복 제거
+      seen.add(sig);
+      hist.push({ name: item.title || item.text, ...h });
+    });
+  });
+  if (hist.length) {
+    hist.sort((a, b) => b.at - a.at);
+    const hbox = document.createElement('div');
+    hbox.className = 'dday-history';
+    const ht = document.createElement('div');
+    ht.className = 'dday-history-title';
+    ht.textContent = '🔄 날짜 변경 기록';
+    hbox.appendChild(ht);
+    hist.slice(0, 8).forEach((h) => {
+      const line = document.createElement('div');
+      line.className = 'dday-history-line';
+      const d = new Date(h.at);
+      line.textContent = h.name + ' · ' + formatShortDate(h.from) + ' → ' + formatShortDate(h.to) + ' (' + (d.getMonth() + 1) + '/' + d.getDate() + ' 변경)';
+      hbox.appendChild(line);
+    });
+    widget.appendChild(hbox);
+  }
 }
 
 function buildMemoItemCard(key, idx, refreshFn) {
