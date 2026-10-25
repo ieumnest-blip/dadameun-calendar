@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>다담은, 달력</title>
 <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAACe0lEQVR4nO1bMXLCMBA8e9LzFXcZikx4QBrqfCGN69TUNHyBmiYPSIaCoeMrvCApmAuHkSWdfCdhyVthI0vavZVky+cKGHhZf/9yyqfCvl1UvmWdBcdCug8uMWrbn2MnD+DmYFQnB+ImmNxw54BcyQOYudWuArmhy9E6B5SAfwFKiD6Ccq27J0oBcp6GQOoOpEZVov0pindA8QI8pWh0+dwYz++Op6j9AFAWoI9oO5/1XGEurymMigBIvJ+oGS5hNIQQF2D53LCJu3CtrxEXQXQS1CBP0c5nvcMqFGICaJNHSIsgIkAs8ghJEQYLIG3J2G0HT4KhM70U6MQIEL5CBAkQ2/I2DF0hWAKkjroNlz41AMBzA3sOeETyiJC+eQvwSLa3gbtCeAkwFvIIjgjFPw47BRhb9BG+LpgckLoDqTEJkLoDqRFVgPePT5EykogmABKzEfQpIw2vFyNBS+HXz/X32ysAXIhtNyvrZTdlDHX4Yn04ez0T6DiAdpwcIzFThPGckbzpWAheAuyOJ1gfzmKNbjerGxF8nMGBb/QBGI/Dlwrl7gqpCKnIAzBfjrL2AwaM39A60KVqAiAe8fmAG3lE0JYYDgeA9BskIVGnCN4UvTaYzg2hUacQWQYlV4jYbQ4WACMQU4ShtqcQcUBMESTJAyjcCWqKoFG3mAA0IhodpXVKviIXdYCWCFrkARTT5OiGZOgyqUkcoZonaNqVdYlhco5mjlCURMnQ19gxssYqgLjJ0i4xYqbK7dtFFT1PMEUuoA3TrjAA7zu7XICc6+6JEkC5TkOAHpTggi7HOwfkLIKJm5VsLl+T2IJqnQNycIOLA4vgWBzBCdwfTCkk/yqyaPwAAAAASUVORK5CYII=">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gamja+Flower&display=swap" rel="stylesheet">
 <link rel="manifest" href="manifest.json">
 <meta name="color-scheme" content="light only">
 <meta name="supported-color-schemes" content="light">
@@ -29,11 +32,13 @@
   }
   html, body {
     margin: 0; padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
+    font-family: 'Gamja Flower', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
     background: #eef2f5 !important;
     color: #33505f;
     overscroll-behavior-y: none;
   }
+
+  button, input, textarea, select { font-family: inherit; }
 
   /* ===== 클라우드 동기화 오버레이 ===== */
   .sync-overlay {
@@ -1439,7 +1444,11 @@
   .dday-widget-del:hover { color: #e06565; }
   .dday-history { margin-top: 8px; padding-top: 8px; border-top: 1px solid #ffe3b0; }
   .dday-history-title { font-size: 11px; color: #b5772f; font-weight: 700; margin-bottom: 4px; }
-  .dday-history-line { font-size: 12px; color: #7a6a52; line-height: 1.5; word-break: break-word; }
+  .dday-history-title { display: flex; justify-content: space-between; align-items: center; }
+  .dday-history-clear { font-family: inherit; font-size: 11px; border: none; background: none; color: #cbb18a; cursor: pointer; padding: 0 2px; }
+  .dday-history-clear:hover { color: #e06565; }
+  .dday-history-line { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; font-size: 12px; color: #7a6a52; line-height: 1.5; word-break: break-word; }
+  .dday-history-line .dday-widget-del { font-size: 15px; padding: 0 4px; }
 
   .agenda-item {
     display: flex;
@@ -3988,6 +3997,19 @@ function computeDdayLabel(targetKey) {
   if (diffDays > 0) return 'D-' + diffDays;
   return 'D+' + Math.abs(diffDays);
 }
+/* 디데이 날짜 변경 기록 삭제 (기간 일정은 날짜마다 같은 기록이 복제돼 있어서 모두 찾아서 지움) */
+function removeDdayHistory(matchFn) {
+  Object.keys(memos).forEach((k) => {
+    memos[k].forEach((it) => {
+      if (it.ddayHistory && it.ddayHistory.length) {
+        it.ddayHistory = it.ddayHistory.filter((e) => !matchFn(e));
+        if (!it.ddayHistory.length) delete it.ddayHistory;
+      }
+    });
+  });
+  saveMemos();
+  updateDdayWidget();
+}
 function updateDdayWidget() {
   renderSelectedAgenda();
   const widget = document.getElementById('ddayWidget');
@@ -4073,13 +4095,34 @@ function updateDdayWidget() {
     hbox.className = 'dday-history';
     const ht = document.createElement('div');
     ht.className = 'dday-history-title';
-    ht.textContent = '🔄 날짜 변경 기록';
+    const htText = document.createElement('span');
+    htText.textContent = '🔄 날짜 변경 기록';
+    ht.appendChild(htText);
+    const clearAll = document.createElement('button');
+    clearAll.type = 'button';
+    clearAll.className = 'dday-history-clear';
+    clearAll.textContent = '전체 삭제';
+    clearAll.addEventListener('click', () => {
+      if (!confirm('날짜 변경 기록을 모두 지울까요?')) return;
+      removeDdayHistory(() => true);
+    });
+    ht.appendChild(clearAll);
     hbox.appendChild(ht);
     hist.slice(0, 8).forEach((h) => {
       const line = document.createElement('div');
       line.className = 'dday-history-line';
       const d = new Date(h.at);
-      line.textContent = h.name + ' · ' + formatShortDate(h.from) + ' → ' + formatShortDate(h.to) + ' (' + (d.getMonth() + 1) + '/' + d.getDate() + ' 변경)';
+      const lt = document.createElement('span');
+      lt.className = 'dday-history-text';
+      lt.textContent = h.name + ' · ' + formatShortDate(h.from) + ' → ' + formatShortDate(h.to) + ' (' + (d.getMonth() + 1) + '/' + d.getDate() + ' 변경)';
+      const lx = document.createElement('button');
+      lx.type = 'button';
+      lx.className = 'dday-widget-del';
+      lx.textContent = '×';
+      lx.title = '이 기록 삭제';
+      lx.addEventListener('click', () => removeDdayHistory((e) => e.at === h.at && e.from === h.from && e.to === h.to));
+      line.appendChild(lt);
+      line.appendChild(lx);
       hbox.appendChild(line);
     });
     widget.appendChild(hbox);
@@ -4174,6 +4217,7 @@ function buildMemoItemCard(key, idx, refreshFn) {
 
   function closeInlineExtras() {
     div.querySelectorAll('.memo-inline-editor, .color-picker-inline').forEach((el) => el.remove());
+    textWrap.style.display = '';
   }
 
   function makeInlineTextEditor(label, currentValue, multiline, onSave) {
@@ -4182,8 +4226,9 @@ function buildMemoItemCard(key, idx, refreshFn) {
     const editorClass = 'memo-inline-editor-' + label;
     btn.addEventListener('click', () => {
       const existing = div.querySelector('.' + editorClass);
-      if (existing) { existing.remove(); return; }
+      if (existing) { existing.remove(); textWrap.style.display = ''; return; }
       closeInlineExtras();
+      const inPlace = label === '내용수정'; // 내용은 아래가 아니라 글이 보이던 그 자리에서 바로 고침
       const wrap = document.createElement('div');
       wrap.className = 'memo-inline-editor ' + editorClass;
       const field = document.createElement(multiline ? 'textarea' : 'input');
@@ -4228,18 +4273,30 @@ function buildMemoItemCard(key, idx, refreshFn) {
       cancelBtn.type = 'button';
       cancelBtn.className = 'btn-inline-cancel';
       cancelBtn.textContent = '취소';
-      cancelBtn.addEventListener('click', () => wrap.remove());
+      cancelBtn.addEventListener('click', () => { wrap.remove(); textWrap.style.display = ''; });
       actionsRow.appendChild(saveBtn);
       actionsRow.appendChild(cancelBtn);
       wrap.appendChild(actionsRow);
-      div.appendChild(wrap);
+      if (inPlace) {
+        textWrap.style.display = 'none';
+        div.insertBefore(wrap, textWrap);
+        field.style.minHeight = Math.max(90, textWrap.offsetHeight) + 'px';
+      } else {
+        div.appendChild(wrap);
+      }
       field.focus();
       if (!multiline) field.select();
     });
     return btn;
   }
 
-  actions.appendChild(makeInlineTextEditor('내용수정', item.text, true, (val) => applyMemoContent(key, idx, val)));
+  const contentEditBtn = makeInlineTextEditor('내용수정', item.text, true, (val) => applyMemoContent(key, idx, val));
+  actions.appendChild(contentEditBtn);
+  // 글자를 직접 눌러도 그 자리에서 바로 수정 (체크박스 줄은 체크가 우선이라 제외)
+  if (!item.isTodo) {
+    textWrap.style.cursor = 'text';
+    textWrap.addEventListener('click', () => { if (!div.querySelector('.memo-inline-editor-내용수정')) contentEditBtn.click(); });
+  }
   actions.appendChild(makeInlineTextEditor('제목수정', item.title || '', false, (val) => applyMemoTitle(key, idx, val)));
 
   const convertBtn = document.createElement('button');
