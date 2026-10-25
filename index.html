@@ -1214,6 +1214,8 @@
     display: flex; flex-direction: column; gap: 6px;
   }
   .memo-item-text { min-width: 0; }
+  .memo-editing { outline: 2px solid #f0a020; outline-offset: 2px; border-radius: 6px; min-height: 1.2em; cursor: text; white-space: pre-wrap; word-break: break-all; }
+  .memo-item-title.memo-editing:empty::before { content: attr(data-placeholder); color: #9fb8c4; font-weight: 400; }
   .memo-item-title {
     font-size: 15px;
     font-weight: 700;
@@ -4290,85 +4292,72 @@ function buildMemoItemCard(key, idx, refreshFn) {
     return btn;
   }
 
-  /* 수정: 제목+내용을 하나로. 누르면 지금 보이는 그 자리가 그대로 입력칸으로 바뀌어서 바로 고치고 저장 */
+  /* 수정: 누르면 지금 보이는 제목·내용 그대로(같은 크기·모양) 글자 위에 깜빡이는 커서가 생겨서 바로 고치고,
+     같은 줄의 "저장"을 누르면 저장됨. (눌러야만 수정 상태가 되고, 글자를 그냥 누르는 것으로는 수정되지 않음) */
   const editBtn = document.createElement('button');
   editBtn.type = 'button';
   editBtn.textContent = '수정';
   editBtn.title = '제목·내용 수정';
-  function openInPlaceEditor() {
-    if (div.querySelector('.memo-inline-editor-수정')) return;
+  const cancelEditBtn = document.createElement('button');
+  cancelEditBtn.type = 'button';
+  cancelEditBtn.textContent = '취소';
+  cancelEditBtn.style.display = 'none';
+  let editing = null;
+  function startEdit() {
     closeInlineExtras();
-    const wrap = document.createElement('div');
-    wrap.className = 'memo-inline-editor memo-inline-editor-수정';
-    const titleField = document.createElement('input');
-    titleField.type = 'text';
-    titleField.className = 'memo-inline-editor-field';
-    titleField.placeholder = '제목 (없어도 돼요)';
-    titleField.value = item.title || '';
-    const field = document.createElement('textarea');
-    field.className = 'memo-inline-editor-field';
-    field.value = item.text || '';
-    wrap.appendChild(titleField);
-    wrap.appendChild(field);
-    let lastField = field;
-    titleField.addEventListener('focus', () => { lastField = titleField; });
-    field.addEventListener('focus', () => { lastField = field; });
-
-    const emojiRow = document.createElement('div');
-    emojiRow.className = 'input-row1 emoji-row memo-inline-editor-emoji-row';
-    EMOJI_PRESETS.forEach((emoji) => {
-      const emojiBtn = document.createElement('button');
-      emojiBtn.type = 'button';
-      emojiBtn.className = 'emoji-btn';
-      emojiBtn.textContent = emoji;
-      emojiBtn.addEventListener('click', () => {
-        const f = lastField;
-        const start = f.selectionStart == null ? f.value.length : f.selectionStart;
-        const end = f.selectionEnd == null ? f.value.length : f.selectionEnd;
-        f.value = f.value.slice(0, start) + emoji + f.value.slice(end);
-        f.focus();
-        f.setSelectionRange(start + emoji.length, start + emoji.length);
-      });
-      emojiRow.appendChild(emojiBtn);
-    });
-    wrap.appendChild(emojiRow);
-
-    const actionsRow = document.createElement('div');
-    actionsRow.className = 'memo-inline-editor-actions';
-    const saveBtn = document.createElement('button');
-    saveBtn.type = 'button';
-    saveBtn.className = 'btn-inline-save';
-    saveBtn.textContent = '저장';
-    saveBtn.addEventListener('click', () => {
-      if (!field.value.trim()) { alert('내용을 입력해주세요.'); return; }
-      applyMemoTitle(key, idx, titleField.value);
-      applyMemoContent(key, idx, field.value);
-    });
-    const cancelBtn = document.createElement('button');
-    cancelBtn.type = 'button';
-    cancelBtn.className = 'btn-inline-cancel';
-    cancelBtn.textContent = '취소';
-    cancelBtn.addEventListener('click', () => { wrap.remove(); textWrap.style.display = ''; });
-    actionsRow.appendChild(saveBtn);
-    actionsRow.appendChild(cancelBtn);
-    wrap.appendChild(actionsRow);
-
-    textWrap.style.display = 'none';
-    div.insertBefore(wrap, textWrap);
-    field.style.minHeight = Math.max(90, textWrap.offsetHeight) + 'px';
-    field.focus();
-    field.setSelectionRange(field.value.length, field.value.length);
+    let titleEl = textWrap.querySelector('.memo-item-title');
+    const createdTitle = !titleEl;
+    if (createdTitle) {
+      titleEl = document.createElement('div');
+      titleEl.className = 'memo-item-title';
+      textWrap.insertBefore(titleEl, textWrap.firstChild);
+    }
+    const bodyEl = textWrap.querySelector('.memo-item-todo-row span, :scope > span');
+    const origTitle = titleEl.textContent;
+    const origBody = bodyEl.textContent;
+    const mode = ('plaintextOnly' in document.createElement('div')) ? 'plaintext-only' : 'true';
+    titleEl.setAttribute('contenteditable', mode);
+    bodyEl.setAttribute('contenteditable', mode);
+    titleEl.setAttribute('data-placeholder', '제목 (없어도 돼요)');
+    titleEl.classList.add('memo-editing');
+    bodyEl.classList.add('memo-editing');
+    bodyEl.textContent = item.text || ''; // ⏰/D-day 꼬리표 없이 실제 내용만 고치게
+    const stop = (e) => { e.preventDefault(); };
+    bodyEl.addEventListener('click', stop);
+    editing = { titleEl, bodyEl, createdTitle, origTitle, origBody, stop };
+    bodyEl.focus();
+    const r = document.createRange(); r.selectNodeContents(bodyEl); r.collapse(false);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    editBtn.textContent = '저장';
+    editBtn.classList.add('btn-inline-save');
+    cancelEditBtn.style.display = '';
+  }
+  function endEdit(restore) {
+    if (!editing) return;
+    const { titleEl, bodyEl, createdTitle, origTitle, origBody, stop } = editing;
+    bodyEl.removeEventListener('click', stop);
+    titleEl.removeAttribute('contenteditable'); bodyEl.removeAttribute('contenteditable');
+    titleEl.classList.remove('memo-editing'); bodyEl.classList.remove('memo-editing');
+    if (restore) {
+      titleEl.textContent = origTitle; bodyEl.textContent = origBody;
+      if (createdTitle) titleEl.remove();
+    }
+    editing = null;
+    editBtn.textContent = '수정';
+    editBtn.classList.remove('btn-inline-save');
+    cancelEditBtn.style.display = 'none';
   }
   editBtn.addEventListener('click', () => {
-    if (div.querySelector('.memo-inline-editor-수정')) { div.querySelector('.memo-inline-editor-수정').remove(); textWrap.style.display = ''; return; }
-    openInPlaceEditor();
+    if (!editing) { startEdit(); return; }
+    const newTitle = editing.titleEl.innerText.replace(/\n+$/g, '');
+    const newText = editing.bodyEl.innerText.replace(/\n+$/g, '');
+    if (!newText.trim()) { alert('내용을 입력해주세요.'); return; }
+    applyMemoTitle(key, idx, newTitle);
+    applyMemoContent(key, idx, newText);
   });
+  cancelEditBtn.addEventListener('click', () => endEdit(true));
   actions.appendChild(editBtn);
-  // 글자를 직접 눌러도 그 자리에서 바로 수정 (체크박스 줄은 체크가 우선이라 제외)
-  if (!item.isTodo) {
-    textWrap.style.cursor = 'text';
-    textWrap.addEventListener('click', openInPlaceEditor);
-  }
+  actions.appendChild(cancelEditBtn);
 
   const convertBtn = document.createElement('button');
   convertBtn.type = 'button';
