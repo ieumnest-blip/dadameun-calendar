@@ -4324,7 +4324,29 @@ function buildMemoItemCard(key, idx, refreshFn) {
     bodyEl.textContent = item.text || ''; // ⏰/D-day 꼬리표 없이 실제 내용만 고치게
     const stop = (e) => { e.preventDefault(); };
     bodyEl.addEventListener('click', stop);
-    editing = { titleEl, bodyEl, createdTitle, origTitle, origBody, stop };
+    // 이모지: 수정 중일 때만 아래에 나타나고, 깜빡이는 커서 위치(제목/내용 중 마지막으로 누른 곳)에 들어감
+    let lastEl = bodyEl;
+    titleEl.addEventListener('focus', () => { lastEl = titleEl; });
+    bodyEl.addEventListener('focus', () => { lastEl = bodyEl; });
+    const emojiRow = document.createElement('div');
+    emojiRow.className = 'input-row1 emoji-row memo-inline-editor-emoji-row';
+    EMOJI_PRESETS.forEach((emoji) => {
+      const eb = document.createElement('button');
+      eb.type = 'button';
+      eb.className = 'emoji-btn';
+      eb.textContent = emoji;
+      // 버튼을 눌러도 글자 칸의 커서가 풀리지 않게
+      ['mousedown', 'pointerdown', 'touchstart'].forEach((ev) => eb.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
+      eb.addEventListener('click', () => {
+        lastEl.focus();
+        if (!document.execCommand('insertText', false, emoji)) {
+          lastEl.textContent += emoji;
+        }
+      });
+      emojiRow.appendChild(eb);
+    });
+    div.insertBefore(emojiRow, textWrap.nextSibling);
+    editing = { titleEl, bodyEl, createdTitle, origTitle, origBody, stop, emojiRow };
     bodyEl.focus();
     const r = document.createRange(); r.selectNodeContents(bodyEl); r.collapse(false);
     const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
@@ -4334,7 +4356,8 @@ function buildMemoItemCard(key, idx, refreshFn) {
   }
   function endEdit(restore) {
     if (!editing) return;
-    const { titleEl, bodyEl, createdTitle, origTitle, origBody, stop } = editing;
+    const { titleEl, bodyEl, createdTitle, origTitle, origBody, stop, emojiRow } = editing;
+    emojiRow.remove();
     bodyEl.removeEventListener('click', stop);
     titleEl.removeAttribute('contenteditable'); bodyEl.removeAttribute('contenteditable');
     titleEl.classList.remove('memo-editing'); bodyEl.classList.remove('memo-editing');
