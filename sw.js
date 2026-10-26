@@ -3,7 +3,7 @@
    - 로그인/동기화에 영향 없도록 Firebase 등 대부분의 요청은 그대로 네트워크로 보냄
    - 페이지 자체(index.html)만 "네트워크 우선, 실패하면 캐시" 방식으로 오프라인에서도 열리게 함 */
 
-const CACHE_NAME = 'dadameun-calendar-v2';
+const CACHE_NAME = 'dadameun-calendar-v3';
 const APP_SHELL = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -40,4 +40,15 @@ self.addEventListener('fetch', (event) => {
         .catch(() => caches.match('./index.html'))
     );
   }
+});
+
+/* 알림을 누르면 앱 창을 앞으로 가져오거나 새로 엽니다 */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const c of list) { if ('focus' in c) return c.focus(); }
+      if (self.clients.openWindow) return self.clients.openWindow('./');
+    })
+  );
 });
