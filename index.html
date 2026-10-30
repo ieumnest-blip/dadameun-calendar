@@ -623,7 +623,7 @@
   }
 
   /* 오늘 표시 (졸린곰/고민곰 공통): 날짜 숫자를 크게 키운 파란 빛나는 동그라미 +
-     오른쪽 위 대각선으로 노란 별 세 개 + 위쪽 "오늘" 말풍선 - 달력을 훑어볼 때 한눈에 찾을 수 있게 */
+     동그라미 오른쪽 위 둘레를 따라 노란 별 세 개 + 위쪽 "오늘" 말풍선 - 달력을 훑어볼 때 한눈에 찾을 수 있게 */
   td.today .day-num {
     background: radial-gradient(circle at 35% 30%, #8fc2ff 0%, #4a86e8 55%, #3463c9 100%);
     box-shadow: 0 0 0 2px #fff, 0 0 0 4px #bcd8ff, 0 0 12px 4px rgba(74,134,232,0.45);
@@ -637,7 +637,7 @@
     top: 50%; left: 50%;
     width: 220%; height: 220%;
     transform: translate(-50%, -50%);
-    background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'><g fill='%23ffd23f' stroke='%23e8a800' stroke-width='0.9' stroke-linejoin='round'><path d='M44.5 13.5 L45.3 15.4 L47.4 15.6 L45.8 16.9 L46.3 18.9 L44.5 17.9 L42.7 18.9 L43.2 16.9 L41.6 15.6 L43.7 15.4 Z'/><path d='M50.5 6.8 L51.5 9.2 L54.0 9.4 L52.1 11.0 L52.7 13.5 L50.5 12.2 L48.3 13.5 L48.9 11.0 L47.0 9.4 L49.5 9.2 Z'/><path d='M56.5 0.2 L57.6 2.9 L60.6 3.2 L58.3 5.1 L59.0 8.0 L56.5 6.4 L54.0 8.0 L54.7 5.1 L52.4 3.2 L55.4 2.9 Z'/></g></svg>") no-repeat center / contain;
+    background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'><g fill='%23ffd23f' stroke='%23e8a800' stroke-width='0.9' stroke-linejoin='round'><path d='M43.5 10.1 L44.5 12.5 L47.1 12.7 L45.1 14.4 L45.7 17.0 L43.5 15.6 L41.3 17.0 L41.9 14.4 L39.9 12.7 L42.5 12.5 Z'/><path d='M49.0 17.3 L50.0 19.7 L52.6 20.0 L50.7 21.7 L51.3 24.2 L49.0 22.8 L46.8 24.2 L47.4 21.7 L45.4 20.0 L48.0 19.7 Z'/><path d='M51.0 26.2 L52.0 28.6 L54.6 28.8 L52.6 30.5 L53.2 33.1 L51.0 31.7 L48.8 33.1 L49.4 30.5 L47.4 28.8 L50.0 28.6 Z'/></g></svg>") no-repeat center / contain;
     pointer-events: none;
   }
   td.today::after {
