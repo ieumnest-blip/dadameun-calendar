@@ -622,8 +622,8 @@
     border-color: #fff;
   }
 
-  /* 졸린곰(계정1) 달력 - 오늘 칸을 종이 달력에 빨간 펜으로 동그라미 친 것처럼 크게 둘러서 한눈에 보이게 */
-  body.acc-1 td.today::after {
+  /* 오늘 칸을 종이 달력에 빨간 펜으로 동그라미 친 것처럼 크게 둘러서 한눈에 보이게 (졸린곰/고민곰 공통) */
+  td.today::after {
     content: '';
     position: absolute;
     inset: -3px;
@@ -5541,7 +5541,6 @@ function updateAccountButtons() {
   document.querySelectorAll('.acc-card').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.acc === currentAccount);
   });
-  document.body.classList.toggle('acc-1', currentAccount === '1');
 }
 function switchAccount(acc) {
   if (acc === currentAccount) return;
