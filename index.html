@@ -622,8 +622,17 @@
     border-color: #fff;
   }
 
-  /* 졸린곰(계정1) 달력 - 달 칸 배경은 흰색 그대로, 오늘 칸만 하늘색으로 칠하고 테두리를 둘러 잘 보이게 */
-  body.acc-1 td.today { background: #d4ecfa; box-shadow: inset 0 0 0 2px #5aaee0; }
+  /* 졸린곰(계정1) 달력 - 오늘 칸을 종이 달력에 빨간 펜으로 동그라미 친 것처럼 크게 둘러서 한눈에 보이게 */
+  body.acc-1 td.today::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border: 3px solid #ff4d4d;
+    border-radius: 55% 45% 52% 48% / 48% 55% 45% 52%;
+    transform: rotate(-3deg);
+    z-index: 3;
+    pointer-events: none;
+  }
 
   /* 기간 등록 - 날짜 숫자 아래에 화살표 달린 선(위쪽으로 향한 화살표), 그 아래에
      테두리 박스 안에 가운데정렬 글자. 겹치는 기간이 여러 개면 세로로 쌓임(JS에서 top 지정) */
@@ -5899,6 +5908,18 @@ document.getElementById('calNavNext').addEventListener('click', () => {
 document.getElementById('todayJumpBtn').addEventListener('click', () => {
   const t = new Date();
   selectMonth(t.getFullYear(), t.getMonth(), true);
+  // 모바일(한 달씩 보이는 화면)에서는 오늘이 있는 주(줄)가 화면 가운데로 오도록 세로로도 스크롤
+  if (window.matchMedia('(max-width: 1099px)').matches) {
+    requestAnimationFrame(() => {
+      const row = document.querySelector('#calendarWrap td.today');
+      if (!row) return;
+      const tr = row.closest('tr');
+      const headerH = document.querySelector('header') ? document.querySelector('header').offsetHeight : 0;
+      const rect = tr.getBoundingClientRect();
+      const top = window.scrollY + rect.top - headerH - (window.innerHeight - headerH - rect.height) / 2;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    });
+  }
 });
 
 renderCalendar();
