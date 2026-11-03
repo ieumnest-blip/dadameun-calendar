@@ -1954,20 +1954,84 @@
     to { transform: translateX(-50%) scale(1); opacity: 1; }
   }
   .move-mode-banner.show { animation: moveModePop 0.2s ease; }
-  .alarm-time {
-    font-size: 20px;
-    font-weight: 700;
-    color: #3d8fc0;
-    margin-top: 6px;
+  /* 알림창 위쪽: 시계는 왼쪽, 일정 제목은 그 오른쪽에 크게 */
+  .alarm-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+  }
+  .alarm-head .alarm-bell { flex: 0 0 auto; font-size: 46px; }
+  .alarm-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 26px;
+    font-weight: 800;
+    color: #263f50;
+    line-height: 1.3;
+    word-break: break-word;
   }
   .alarm-text {
-    font-size: 22px;
-    font-weight: 700;
-    color: #33505f;
-    margin: 10px 0 24px;
+    font-size: 15px;
+    color: #4f6878;
+    margin: 10px 0 0;
+    text-align: left;
+    white-space: pre-line;
     word-break: break-word;
-    line-height: 1.4;
+    line-height: 1.45;
+    max-height: 30vh;
+    overflow-y: auto;
   }
+  .alarm-text:empty { display: none; }
+  .alarm-time-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 18px 0 20px;
+    padding: 10px 12px;
+    background: #f1f7fb;
+    border-radius: 12px;
+  }
+  .alarm-time {
+    font-size: 19px;
+    font-weight: 700;
+    color: #3d8fc0;
+  }
+  .alarm-box .alarm-edit-btn {
+    width: auto;
+    flex: 0 0 auto;
+    background: #fff;
+    color: #3d8fc0;
+    border: 1px solid #bcd8ea;
+    border-radius: 10px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .alarm-edit { display: none; margin: -8px 0 18px; }
+  .alarm-edit.show { display: block; }
+  .alarm-edit-quick { display: flex; gap: 6px; margin-bottom: 8px; }
+  .alarm-box .alarm-edit-quick button {
+    flex: 1 1 0;
+    background: #eef6fb;
+    color: #2f6f99;
+    border: 1px solid #cfe3ef;
+    border-radius: 10px;
+    padding: 8px 0;
+    font-size: 14px;
+  }
+  .alarm-edit input[type=time] {
+    width: 100%;
+    box-sizing: border-box;
+    font-family: inherit;
+    font-size: 20px;
+    padding: 8px 10px;
+    border: 1px solid #bcd8ea;
+    border-radius: 10px;
+    color: #263f50;
+    margin-bottom: 8px;
+  }
+  .alarm-box .alarm-save-btn { background: #ff9f1a; }
   .alarm-box button {
     font-family: inherit;
     width: 100%;
@@ -2330,9 +2394,24 @@
 
 <div class="alarm-overlay" id="alarmOverlay">
   <div class="alarm-box">
-    <div class="alarm-bell">⏰</div>
-    <div class="alarm-time" id="alarmOverlayTime"></div>
+    <div class="alarm-head">
+      <div class="alarm-bell">⏰</div>
+      <div class="alarm-title" id="alarmOverlayTitle"></div>
+    </div>
     <div class="alarm-text" id="alarmOverlayText"></div>
+    <div class="alarm-time-row">
+      <span class="alarm-time" id="alarmOverlayTime"></span>
+      <button type="button" class="alarm-edit-btn" id="alarmEditBtn">✏️ 시간 수정</button>
+    </div>
+    <div class="alarm-edit" id="alarmEdit">
+      <div class="alarm-edit-quick">
+        <button type="button" data-add="10">+10분</button>
+        <button type="button" data-add="30">+30분</button>
+        <button type="button" data-add="60">+1시간</button>
+      </div>
+      <input type="time" id="alarmEditTime">
+      <button type="button" class="alarm-save-btn" id="alarmEditSave">이 시간으로 다시 알림</button>
+    </div>
     <button type="button" id="alarmOverlayClose">확인</button>
   </div>
 </div>
@@ -2837,7 +2916,7 @@ const checkListStore = (function () {
     if (out.length) { save(); render(); }
     return out;
   }
-  return { load, save, dueAlarms, setDone };
+  return { load, save, render, dueAlarms, setDone };
 })();
 
 function attachMemoBoxHandlers(boxId, saveFn) {
@@ -5810,21 +5889,61 @@ function stopAlarmAttention() {
   alarmRepeatTimer = alarmTitleTimer = null;
   document.title = ORIGINAL_TITLE;
 }
+let currentAlarm = null;
 function showNextAlarm() {
   if (alarmShowing || alarmQueue.length === 0) return;
   alarmShowing = true;
-  const { dateKey, timeStr, text } = alarmQueue.shift();
+  currentAlarm = alarmQueue.shift();
+  const { dateKey, timeStr, title, text } = currentAlarm;
+  document.getElementById('alarmOverlayTitle').textContent = title || '알림';
+  document.getElementById('alarmOverlayText').textContent = text && text !== title ? text : '';
   document.getElementById('alarmOverlayTime').textContent = formatShortDate(dateKey) + ' ' + timeStr;
-  document.getElementById('alarmOverlayText').textContent = text;
+  document.getElementById('alarmEdit').classList.remove('show');
+  document.getElementById('alarmEditBtn').style.display = currentAlarm.item ? '' : 'none';
   document.getElementById('alarmOverlay').classList.add('show');
   playAlarmBeep();
   startAlarmAttention();
 }
-document.getElementById('alarmOverlayClose').addEventListener('click', () => {
+function closeAlarmOverlay() {
   document.getElementById('alarmOverlay').classList.remove('show');
   alarmShowing = false;
+  currentAlarm = null;
   stopAlarmAttention();
   showNextAlarm();
+}
+document.getElementById('alarmOverlayClose').addEventListener('click', closeAlarmOverlay);
+
+/* 알림창에서 시간 수정: 같은 일정의 알람 시간을 바꾸고 그 시간에 다시 울리게 함 */
+document.getElementById('alarmEditBtn').addEventListener('click', () => {
+  stopAlarmAttention();
+  const edit = document.getElementById('alarmEdit');
+  edit.classList.toggle('show');
+  const now = new Date();
+  const later = new Date(now.getTime() + 10 * 60000);
+  document.getElementById('alarmEditTime').value = pad(later.getHours()) + ':' + pad(later.getMinutes());
+});
+document.querySelectorAll('.alarm-edit-quick button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const t = new Date(Date.now() + Number(btn.dataset.add) * 60000);
+    document.getElementById('alarmEditTime').value = pad(t.getHours()) + ':' + pad(t.getMinutes());
+  });
+});
+document.getElementById('alarmEditSave').addEventListener('click', () => {
+  const newTime = normalizeAlarmTime(document.getElementById('alarmEditTime').value);
+  if (!newTime || !currentAlarm || !currentAlarm.item) return;
+  const it = currentAlarm.item;
+  if (currentAlarm.kind === 'chk') {
+    it.alarm = it.alarm.slice(0, 10) + 'T' + newTime;
+    it.fired = false;
+    checkListStore.save();
+    checkListStore.render();
+  } else {
+    it.alarmTime = newTime;
+    it.alarmFired = false;
+    saveMemos();
+    renderCalendar();
+  }
+  closeAlarmOverlay();
 });
 
 function checkAlarms() {
@@ -5838,7 +5957,7 @@ function checkAlarms() {
     if (it.alarmTime && !it.alarmFired && it.alarmTime <= nowHM) {
       it.alarmFired = true;
       changed = true;
-      alarmQueue.push({ dateKey: k, timeStr: it.alarmTime, text: it.text });
+      alarmQueue.push({ dateKey: k, timeStr: it.alarmTime, title: previewLabel(it), text: it.title ? it.text : String(it.text || '').split('\n').slice(1).join('\n').trim(), kind: 'cal', item: it });
       fireSystemNotification('⏰ ' + it.text, k + ' ' + it.alarmTime, 'cal-' + k + '-' + it.alarmTime);
     }
   });
@@ -5897,7 +6016,7 @@ window.__onNativeResume = function () { try { checkAlarms(); checkCheckListAlarm
 function checkCheckListAlarms() {
   checkListStore.dueAlarms().forEach((it) => {
     const dateKey = it.alarm.slice(0, 10).split('-').map(Number);
-    alarmQueue.push({ dateKey: keyOf(dateKey[0], dateKey[1] - 1, dateKey[2]), timeStr: it.alarm.slice(11, 16), text: '✅ ' + it.text });
+    alarmQueue.push({ dateKey: keyOf(dateKey[0], dateKey[1] - 1, dateKey[2]), timeStr: it.alarm.slice(11, 16), title: '✅ ' + it.text, text: '', kind: 'chk', item: it });
     fireSystemNotification('⏰ ' + it.text, 'Check ' + it.alarm.replace('T', ' '), 'chk-' + it.id);
   });
   showNextAlarm();
