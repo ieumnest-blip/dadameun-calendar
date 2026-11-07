@@ -729,14 +729,6 @@
     background: #eaf3fa;
     cursor: pointer;
   }
-  .memo-preview-sub {
-    display: block;
-    flex-basis: 100%;
-    font-size: 0.85em;
-    font-weight: 500;
-    opacity: 0.8;
-    margin-top: 1px;
-  }
   .memo-more-summary {
     margin-top: 2px;
     font-size: 14px;
@@ -3174,14 +3166,6 @@ function maxVisibleItems() {
 function previewLabel(item) {
   return item.title ? item.title : firstLine(item.text);
 }
-/* 제목과 내용이 둘 다 있으면 달력 칸에서 제목 아래에 내용 첫 줄도 작게 보여줌 */
-function appendPreviewSub(el, item) {
-  if (!item.title || !String(item.text || '').trim()) return;
-  const sub = document.createElement('span');
-  sub.className = 'memo-preview-sub';
-  sub.textContent = firstLine(item.text);
-  el.appendChild(sub);
-}
 
 
 /* 대한민국 공휴일 & 대체공휴일 (2024~2027, 음력 명절 포함) */
@@ -3415,7 +3399,6 @@ function buildMonthBlock(year, month) {
               if (it.color) txt.style.color = it.color;
               prow.appendChild(cb);
               prow.appendChild(txt);
-              appendPreviewSub(prow, it);
               list.appendChild(prow);
               attachLongPressMove(prow, () => ({ type: 'normal', key: k, idx: itemIdx, text: it.text }));
             } else {
@@ -3425,7 +3408,6 @@ function buildMonthBlock(year, month) {
               if (it.bgColor) prow.style.backgroundColor = it.bgColor;
               prow.textContent = (it.alarmTime ? '⏰ ' : '') + (it.isDday && it.ddayTarget ? '[' + computeDdayLabel(it.ddayTarget) + '] ' : '') + previewLabel(it);
               if (it.color) prow.style.color = it.color;
-              appendPreviewSub(prow, it);
               list.appendChild(prow);
               attachLongPressMove(prow, () => ({ type: 'normal', key: k, idx: itemIdx, text: it.text }));
             }
