@@ -883,9 +883,11 @@
   }
 
   /* ===== 하단 입력 바 ===== */
-  .quickadd-modal {
-    max-width: 480px;
+  .modal.quickadd-modal {
+    max-width: 380px; /* 기간·할일 체크를 알람·디데이 줄로 옮기면서 그만큼 폭을 줄임 */
   }
+  #alarmRow { flex-wrap: wrap; gap: 6px 10px; }
+  #alarmRow #alarmTime { flex: 1 1 100%; box-sizing: border-box; } /* 알람 시간 칸은 체크 버튼들 아래 한 줄 전체 */
   @media (min-width: 1100px) {
     .date-input-wrap { flex: 1 1 auto; }
     #manageBg {
@@ -2255,21 +2257,21 @@
       <button id="openPicker" type="button">📅</button>
       <input type="date" id="memoDateNative">
     </div>
+  </div>
+  <div class="input-row1" id="alarmRow">
     <label class="range-toggle">
       <input type="checkbox" id="rangeToggle"> 기간
     </label>
     <label class="range-toggle">
       <input type="checkbox" id="todoToggle"> 할일
     </label>
-  </div>
-  <div class="input-row1" id="alarmRow">
     <label class="range-toggle">
       <input type="checkbox" id="alarmToggle"> ⏰ 알람
     </label>
-    <input type="text" id="alarmTime" placeholder="예: 1500 (오후 3시)" inputmode="numeric" maxlength="5" style="display:none;">
     <label class="range-toggle">
       <input type="checkbox" id="ddayToggle"> 📌 디데이
     </label>
+    <input type="text" id="alarmTime" placeholder="예: 1500 (오후 3시)" inputmode="numeric" maxlength="5" style="display:none;">
   </div>
   <div class="input-row1" id="repeatRow">
     <span class="color-label">🔁 반복</span>
