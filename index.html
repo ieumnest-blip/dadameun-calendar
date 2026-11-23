@@ -1728,6 +1728,43 @@
     flex-direction: column;
     min-height: 140px;
   }
+  /* 메모 칸 제목·아이콘 바꾸기 (제목 글자를 누르면 바로 고치고, 아이콘을 누르면 고르는 창) */
+  .memo-title-icon {
+    font: inherit;
+    font-size: 13px;
+    line-height: 1;
+    padding: 2px 3px;
+    margin: -2px 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .memo-title-icon:hover { background: #eef4f8; }
+  .memo-title-text { cursor: text; border-radius: 4px; padding: 0 2px; outline: none; }
+  .memo-title-text:hover { background: #f1f6fa; }
+  .memo-title-text[contenteditable] { background: #fff; box-shadow: 0 0 0 1.5px #8ec6f0; cursor: text; }
+  .memo-icon-picker {
+    position: fixed;
+    z-index: 2100;
+    display: grid;
+    grid-template-columns: repeat(8, 30px);
+    gap: 2px;
+    padding: 8px;
+    background: #fff;
+    border: 1px solid #c7d6de;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  }
+  .memo-icon-picker button {
+    width: 30px; height: 30px;
+    border: none; border-radius: 8px;
+    background: transparent;
+    font-size: 17px;
+    cursor: pointer;
+  }
+  .memo-icon-picker button:hover { background: #eef4f8; }
+  .memo-icon-picker .icon-reset { grid-column: span 8; width: auto; font-size: 12px; color: #4a7996; font-family: inherit; }
   .memo-freebox-title {
     display: flex;
     align-items: center;
@@ -2229,16 +2266,16 @@
   <div class="dday-widget" id="ddayWidget" style="display:none;"></div>
   <div class="memo-freebox-wrap movable-block" id="installMemoWrap" style="display:none;">
     <button type="button" class="block-move-handle" title="끌어서 위치 옮기기 (두 번 누르면 원래 자리로)">⠿</button>
-    <div class="memo-freebox-title">❗ 설치확인기간</div>
+    <div class="memo-freebox-title editable-memo-title" data-key="install" data-icon="❗" data-name="설치확인기간"><button type="button" class="memo-title-icon" title="눌러서 아이콘 바꾸기">❗</button><span class="memo-title-text" title="눌러서 제목 바꾸기">설치확인기간</span></div>
     <div class="memo-box" id="installMemoBox" contenteditable="true" data-placeholder="설치확인기간을 입력하세요..."></div>
   </div>
   <div class="memo-freebox-wrap movable-block" id="freeMemoWrap">
     <button type="button" class="block-move-handle" title="끌어서 위치 옮기기 (두 번 누르면 원래 자리로)">⠿</button>
-    <div class="memo-freebox-title">📝 메모</div>
+    <div class="memo-freebox-title editable-memo-title" data-key="free" data-icon="📝" data-name="메모"><button type="button" class="memo-title-icon" title="눌러서 아이콘 바꾸기">📝</button><span class="memo-title-text" title="눌러서 제목 바꾸기">메모</span></div>
     <div class="memo-box" id="freeMemoBox" contenteditable="true" data-placeholder="메모를 입력하세요..."></div>
   </div>
   <div class="memo-freebox-wrap" id="quoteMemoWrap" style="display:none;">
-    <div class="memo-freebox-title">📑 견적서 &amp; 제안서</div>
+    <div class="memo-freebox-title editable-memo-title" data-key="quote" data-icon="📑" data-name="견적서 &amp; 제안서"><button type="button" class="memo-title-icon" title="눌러서 아이콘 바꾸기">📑</button><span class="memo-title-text" title="눌러서 제목 바꾸기">견적서 &amp; 제안서</span></div>
     <div class="memo-box" id="quoteMemoBox" contenteditable="true" data-placeholder="견적서 및 제안서 내용을 입력하세요..."></div>
   </div>
 </div>
@@ -2737,7 +2774,95 @@ function saveQuoteMemo() {
   pushToCloud();
 }
 // 졸린곰(계정1)은 기존처럼 메모 박스 하나만, 고민곰(계정2)은 견적서&제안서 박스를 추가로 보여줌
+/* 메모 칸(설치확인기간·메모·견적서&제안서) 제목과 아이콘은 계정별로 저장되고 클라우드로 다른 기기에도 같이 반영됨 */
+function memoTitlesKeyFor(acc) { return 'yearlyCalendarMemoTitles_acc' + acc; }
+function loadMemoTitles(acc) {
+  try { return JSON.parse(localStorage.getItem(memoTitlesKeyFor(acc)) || '{}') || {}; } catch (e) { return {}; }
+}
+function saveMemoTitle(key, field, value) {
+  const all = loadMemoTitles(currentAccount);
+  all[key] = Object.assign({}, all[key]);
+  if (value) all[key][field] = value; else delete all[key][field];
+  localStorage.setItem(memoTitlesKeyFor(currentAccount), JSON.stringify(all));
+  pushToCloud();
+  applyMemoTitles(currentAccount);
+}
+function applyMemoTitles(acc) {
+  const all = loadMemoTitles(acc);
+  document.querySelectorAll('.editable-memo-title').forEach((el) => {
+    const saved = all[el.dataset.key] || {};
+    el.querySelector('.memo-title-icon').textContent = saved.icon || el.dataset.icon;
+    const textEl = el.querySelector('.memo-title-text');
+    if (!textEl.hasAttribute('contenteditable')) textEl.textContent = saved.name || el.dataset.name;
+  });
+}
+const MEMO_TITLE_ICONS = ['❗', '📝', '📑', '📌', '⭐', '✅', '🔥', '💡', '⚡', '📞', '💧', '🎉', '📋', '📅', '⏰', '🔔',
+  '🏠', '🏢', '🔧', '🛠️', '📦', '🚚', '💰', '🧾', '✏️', '📎', '🗂️', '❤️', '🩷', '🩵', '🍀', '🐻'];
+function openMemoIconPicker(titleEl) {
+  closeMemoIconPicker();
+  const picker = document.createElement('div');
+  picker.className = 'memo-icon-picker';
+  picker.id = 'memoIconPicker';
+  MEMO_TITLE_ICONS.forEach((icon) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = icon;
+    b.addEventListener('click', () => { saveMemoTitle(titleEl.dataset.key, 'icon', icon); closeMemoIconPicker(); });
+    picker.appendChild(b);
+  });
+  const reset = document.createElement('button');
+  reset.type = 'button';
+  reset.className = 'icon-reset';
+  reset.textContent = '원래 아이콘으로 (' + titleEl.dataset.icon + ')';
+  reset.addEventListener('click', () => { saveMemoTitle(titleEl.dataset.key, 'icon', ''); closeMemoIconPicker(); });
+  picker.appendChild(reset);
+  document.body.appendChild(picker);
+  const r = titleEl.querySelector('.memo-title-icon').getBoundingClientRect();
+  const pw = picker.offsetWidth, ph = picker.offsetHeight;
+  picker.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
+  picker.style.top = (r.bottom + 6 + ph > window.innerHeight ? Math.max(8, r.top - ph - 6) : r.bottom + 6) + 'px';
+  setTimeout(() => document.addEventListener('pointerdown', onPickerOutside, true), 0);
+}
+function onPickerOutside(e) {
+  const picker = document.getElementById('memoIconPicker');
+  if (picker && !picker.contains(e.target)) closeMemoIconPicker();
+}
+function closeMemoIconPicker() {
+  const picker = document.getElementById('memoIconPicker');
+  if (picker) picker.remove();
+  document.removeEventListener('pointerdown', onPickerOutside, true);
+}
+document.querySelectorAll('.editable-memo-title').forEach((titleEl) => {
+  titleEl.querySelector('.memo-title-icon').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (document.getElementById('memoIconPicker')) { closeMemoIconPicker(); return; }
+    openMemoIconPicker(titleEl);
+  });
+  const textEl = titleEl.querySelector('.memo-title-text');
+  textEl.addEventListener('click', () => {
+    if (textEl.hasAttribute('contenteditable')) return;
+    textEl.setAttribute('contenteditable', ('plaintextOnly' in textEl) ? 'plaintext-only' : 'true');
+    textEl.focus();
+    const r = document.createRange(); r.selectNodeContents(textEl);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+  });
+  let cancelled = false;
+  textEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); textEl.blur(); }
+    else if (e.key === 'Escape') { cancelled = true; textEl.blur(); }
+  });
+  textEl.addEventListener('blur', () => {
+    if (!textEl.hasAttribute('contenteditable')) return;
+    textEl.removeAttribute('contenteditable');
+    const v = textEl.textContent.replace(/\s+/g, ' ').trim();
+    if (cancelled) { cancelled = false; applyMemoTitles(currentAccount); return; }
+    // 비우면 원래 제목으로 돌아감
+    saveMemoTitle(titleEl.dataset.key, 'name', v === titleEl.dataset.name ? '' : v);
+  });
+});
+
 function updateQuoteMemoVisibility(acc) {
+  applyMemoTitles(acc);
   const show = (id, on) => {
     const wrap = document.getElementById(id);
     if (wrap) wrap.style.display = on ? 'flex' : 'none';
