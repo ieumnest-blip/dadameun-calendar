@@ -1806,6 +1806,36 @@
     border: 2px solid #fff; box-shadow: 0 0 0 1px #cfdbe3;
     padding: 0; cursor: pointer; flex-shrink: 0;
   }
+  .memo-color-popup .mc-circle-btn {
+    flex-shrink: 0;
+    height: 26px;
+    padding: 0 9px 0 7px;
+    border: none;
+    border-radius: 13px;
+    background: #fff0f0;
+    color: #e23d3d;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 0 0 1px #f3c4c4;
+  }
+  /* 메모칸에서 글자를 드래그해서 그린 손글씨 동그라미 */
+  .memo-box .hand-circle {
+    position: relative;
+    display: inline-block;
+    padding: 0 4px;
+    margin: 2px 2px;
+  }
+  .memo-box .hand-circle::after {
+    content: '';
+    position: absolute;
+    inset: -3px -2px;
+    border: 2px solid #ff4d4d;
+    border-radius: 55% 45% 52% 48% / 48% 55% 45% 52%;
+    transform: rotate(-3deg);
+    pointer-events: none;
+  }
   .memo-color-popup .mc-swatch.mc-default {
     background: #fff; color: #33505f; font-size: 11px; font-weight: 700;
     width: auto; border-radius: 13px; padding: 0 8px; line-height: 22px;
@@ -3146,11 +3176,46 @@ function ensureMemoColorPopup() {
     b.addEventListener('click', () => applyMemoColor(color));
     pop.appendChild(b);
   };
+  // 선택한 글자에 손글씨 동그라미 치기 (이미 동그라미 안이면 동그라미 지우기)
+  const circleBtn = document.createElement('button');
+  circleBtn.type = 'button';
+  circleBtn.className = 'mc-circle-btn';
+  circleBtn.textContent = '◯ 동그라미';
+  circleBtn.title = '선택한 글씨에 동그라미 (한 번 더 누르면 지우기)';
+  circleBtn.addEventListener('click', toggleMemoCircle);
+  pop.appendChild(circleBtn);
   MEMO_TEXT_COLORS.forEach((c) => mk('', c));
   mk('mc-default', MEMO_DEFAULT_TEXT_COLOR, '기본');
   document.body.appendChild(pop);
   memoColorPopup = pop;
   return pop;
+}
+function toggleMemoCircle() {
+  if (!memoColorActive || !memoColorRange) return;
+  const box = memoColorActive.box;
+  const range = memoColorRange;
+  const startEl = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
+  const existing = startEl && startEl.closest('.hand-circle');
+  if (existing && box.contains(existing)) {
+    // 이미 동그라미 안을 선택했으면 동그라미만 지우고 글자는 그대로
+    const parent = existing.parentNode;
+    while (existing.firstChild) parent.insertBefore(existing.firstChild, existing);
+    parent.removeChild(existing);
+  } else {
+    const span = document.createElement('span');
+    span.className = 'hand-circle';
+    span.appendChild(range.extractContents());
+    // 안에 있던 예전 동그라미는 풀어서 겹치지 않게
+    span.querySelectorAll('.hand-circle').forEach((inner) => {
+      while (inner.firstChild) inner.parentNode.insertBefore(inner.firstChild, inner);
+      inner.remove();
+    });
+    range.insertNode(span);
+  }
+  window.getSelection().removeAllRanges();
+  memoColorRange = null;
+  hideMemoColorPopup();
+  memoColorActive.saveFn();
 }
 function hideMemoColorPopup() { if (memoColorPopup) memoColorPopup.classList.remove('show'); }
 function applyMemoColor(color) {
