@@ -1536,6 +1536,21 @@
   .agenda-day-card--tomorrow { border-top-color: #4caf82; }
   .agenda-day-card--dayafter { border-top-color: #e0a23d; }
   .agenda-day-card-title { margin-bottom: 4px; }
+  .agenda-today-circle {
+    position: relative;
+    display: inline-block;
+    padding: 0 3px;
+    margin: 0 2px 0 3px;
+  }
+  .agenda-today-circle::after {
+    content: '';
+    position: absolute;
+    inset: -4px -3px;
+    border: 2px solid #ff4d4d;
+    border-radius: 55% 45% 52% 48% / 48% 55% 45% 52%;
+    transform: rotate(-4deg);
+    pointer-events: none;
+  }
 
   /* ===== "오늘의 일정"·"Check" 칸 위치 옮기기 (오른쪽 위 ⠿ 손잡이를 끌어서) ===== */
   .movable-block { position: relative; }
@@ -1568,6 +1583,33 @@
     box-shadow: 0 10px 28px rgba(0,0,0,0.22);
     border-radius: 16px;
   }
+  /* 칸 아래쪽 손잡이를 위아래로 끌어서 높이 조절 (두 번 누르면 원래 높이) */
+  .block-resize-grip {
+    flex-shrink: 0;
+    height: 12px;
+    margin: 4px -4px -6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: ns-resize;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .block-resize-grip::before {
+    content: '';
+    width: 40px; height: 4px;
+    border-radius: 3px;
+    background: #c3d4df;
+  }
+  .block-resize-grip:hover::before, .block-resize-grip.dragging::before { background: #3d8fc0; }
+  #agendaBlock { display: flex; flex-direction: column; }
+  #todayAgenda { min-height: 0; }
+  .movable-block.block-sized { flex: 0 0 auto !important; height: var(--bh); min-height: 0; }
+  #agendaBlock.block-sized #todayAgenda { flex: 1 1 auto; overflow-y: auto; display: flex; flex-direction: column; }
+  #agendaBlock.block-sized .agenda-day-card:last-child { flex: 1 0 auto; } /* 높이를 키우면 카드도 같이 길어지게 */
+  .memo-splitter.no-below { display: none !important; } /* 메모 칸을 다른 곳으로 옮겨서 아래에 아무 칸도 없을 때 */
+  .memo-freebox-wrap.block-sized .memo-box { flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto; }
   .block-drop-placeholder {
     flex-shrink: 0;
     margin-top: 14px;
@@ -2220,7 +2262,8 @@
     <div class="memo-box" id="installMemoBox" contenteditable="true" data-placeholder="설치확인기간을 입력하세요..."></div>
   </div>
   <div class="memo-splitter" id="memoSplitter" title="위아래로 끌어서 크기 조절 (더블클릭: 원래대로)"></div>
-  <div class="memo-freebox-wrap">
+  <div class="memo-freebox-wrap movable-block" id="freeMemoWrap">
+    <button type="button" class="block-move-handle" title="끌어서 위치 옮기기 (두 번 누르면 원래 자리로)">⠿</button>
     <div class="memo-freebox-title">📝 메모</div>
     <div class="memo-box" id="freeMemoBox" contenteditable="true" data-placeholder="메모를 입력하세요..."></div>
   </div>
@@ -2735,6 +2778,7 @@ function updateQuoteMemoVisibility(acc) {
   show('installMemoWrap', acc === '1');
   const sp = document.getElementById('memoSplitter');
   if (sp) sp.classList.toggle('show', acc === '1');
+  if (typeof updateSplitterBelow === 'function') updateSplitterBelow();
 }
 
 /* 계정별로 따로 저장되는 추가 메모칸 (저장 키가 yearlyCalendar로 시작해서 클라우드에도 같이 동기화됨) */
@@ -3097,8 +3141,7 @@ setupMemoColorBar('installMemoBox', installMemoStore.save);
 (function setupMemoSplitter() {
   const splitter = document.getElementById('memoSplitter');
   const top = document.getElementById('installMemoWrap');
-  const bottom = splitter ? splitter.nextElementSibling : null;
-  if (!splitter || !top || !bottom) return;
+  if (!splitter || !top) return;
   const HKEY = 'dadameunInstallMemoHeight';
   function applyHeight(h) {
     if (!h) {
@@ -3115,7 +3158,9 @@ setupMemoColorBar('installMemoBox', installMemoStore.save);
     dragging = true;
     startY = e.clientY;
     startH = top.getBoundingClientRect().height;
-    const bottomH = bottom.getBoundingClientRect().height;
+    // 아래 칸은 끌 때마다 다시 찾음 (메모 칸을 다른 곳으로 옮겼을 수도 있어서)
+    const bottom = splitter.nextElementSibling;
+    const bottomH = bottom && bottom.getClientRects().length ? bottom.getBoundingClientRect().height : 300;
     const desktop = window.matchMedia('(min-width: 1100px)').matches;
     maxH = desktop ? startH + bottomH - 100 : 900;
     splitter.classList.add('dragging');
@@ -5761,14 +5806,24 @@ document.getElementById('imgLightbox').addEventListener('click', () => {
   document.getElementById('imgLightbox').classList.remove('show');
 });
 
-/* ===== "오늘의 일정"·"Check" 칸 위치를 끌어서 바꾸기 =====
+/* ===== "오늘의 일정"·"Check"·"메모" 칸 위치를 끌어서 바꾸기 =====
    오른쪽 위 ⠿ 손잡이를 끌어서 왼쪽 패널 안에서 순서를 바꾸거나, 오른쪽 패널의 위쪽(설치확인기간 위)이나
    맨 아래로 옮길 수 있음. 손잡이를 두 번 누르면 원래 자리로. 위치는 이 기기에만 저장됨
    (PC와 휴대폰은 화면 모양이 달라서 따로 기억). */
 const BLOCK_LAYOUT_KEY = 'dadameunBlockLayout';
-const MOVABLE_BLOCK_IDS = ['agendaBlock', 'checkMemoWrap'];
+const MOVABLE_BLOCK_IDS = ['agendaBlock', 'checkMemoWrap', 'freeMemoWrap'];
+const BLOCK_HOME = { agendaBlock: 'left', checkMemoWrap: 'left', freeMemoWrap: 'rightBottom' };
 function rightTopAnchor() { return document.getElementById('installMemoWrap'); }
+function rightBottomAnchor() { return document.getElementById('quoteMemoWrap'); }
+function updateSplitterBelow() {
+  const sp = document.getElementById('memoSplitter');
+  if (!sp) return;
+  let next = sp.nextElementSibling;
+  while (next && !next.getClientRects().length) next = next.nextElementSibling;
+  sp.classList.toggle('no-below', !next);
+}
 function saveBlockLayout() {
+  updateSplitterBelow();
   const layout = [];
   document.querySelectorAll('#memoPanel > .movable-block').forEach((el) => layout.push({ id: el.id, where: 'left' }));
   let afterAnchor = false;
@@ -5780,7 +5835,7 @@ function saveBlockLayout() {
 }
 function placeBlock(el, where) {
   if (where === 'rightTop') document.getElementById('ddayPanel').insertBefore(el, rightTopAnchor());
-  else if (where === 'rightBottom') document.getElementById('ddayPanel').appendChild(el);
+  else if (where === 'rightBottom') document.getElementById('ddayPanel').insertBefore(el, rightBottomAnchor());
   else document.getElementById('memoPanel').appendChild(el);
 }
 function applyBlockLayout() {
@@ -5796,8 +5851,9 @@ function applyBlockLayout() {
   });
 }
 function resetBlockLayout() {
-  MOVABLE_BLOCK_IDS.forEach((id) => placeBlock(document.getElementById(id), 'left'));
+  MOVABLE_BLOCK_IDS.forEach((id) => placeBlock(document.getElementById(id), BLOCK_HOME[id]));
   try { localStorage.removeItem(BLOCK_LAYOUT_KEY); } catch (e) { /* 무시 */ }
+  updateSplitterBelow();
 }
 /* 지금 끌고 있는 칸을 내려놓을 수 있는 자리들: 왼쪽 패널 안 아무 곳, 오른쪽 패널 위쪽 영역, 오른쪽 패널 맨 아래 */
 function blockDropSlots(placeholder) {
@@ -5817,7 +5873,7 @@ function blockDropSlots(placeholder) {
     const panelLast = Array.from(panel.children).filter((el) => el !== placeholder && visible(el)).pop();
     if (last) y = last.getBoundingClientRect().bottom;
     else if (visible(endBefore)) y = endBefore.getBoundingClientRect().top;
-    else if (!endBefore && panelLast) y = panelLast.getBoundingClientRect().bottom; // 맨 아래 자리
+    else if ((!endBefore || endBefore === rightBottomAnchor()) && panelLast) y = panelLast.getBoundingClientRect().bottom; // 맨 아래 자리
     else y = pr.top + 20;
     slots.push({ panel, before: endBefore || null, x: cx, y });
   }
@@ -5828,7 +5884,7 @@ function blockDropSlots(placeholder) {
   const ai = kids.indexOf(rightTopAnchor());
   addRegion(right, kids.slice(0, ai).filter(isMovable), rightTopAnchor());
   const bottomItems = kids.slice(ai).filter(isMovable);
-  addRegion(right, bottomItems, null);
+  addRegion(right, bottomItems, rightBottomAnchor());
   return slots;
 }
 document.querySelectorAll('.block-move-handle').forEach((handle) => {
@@ -5886,6 +5942,58 @@ document.querySelectorAll('.block-move-handle').forEach((handle) => {
   });
 });
 applyBlockLayout();
+updateSplitterBelow();
+
+const BLOCK_HEIGHT_KEY = 'dadameunBlockHeights';
+function loadBlockHeights() {
+  try { return JSON.parse(localStorage.getItem(BLOCK_HEIGHT_KEY) || '{}') || {}; } catch (e) { return {}; }
+}
+function setBlockHeight(el, h) {
+  if (!h) { el.classList.remove('block-sized'); el.style.removeProperty('--bh'); return; }
+  el.classList.add('block-sized');
+  el.style.setProperty('--bh', h + 'px');
+}
+(function setupBlockResize() {
+  const heights = loadBlockHeights();
+  MOVABLE_BLOCK_IDS.forEach((id) => {
+    const block = document.getElementById(id);
+    if (!block) return;
+    setBlockHeight(block, Number(heights[id]) || 0);
+    const grip = document.createElement('div');
+    grip.className = 'block-resize-grip';
+    grip.title = '위아래로 끌어서 높이 조절 (두 번 누르면 원래 높이)';
+    block.appendChild(grip);
+    let startY = 0, startH = 0, dragging = false;
+    grip.addEventListener('pointerdown', (e) => {
+      dragging = true;
+      startY = e.clientY;
+      startH = block.getBoundingClientRect().height;
+      grip.classList.add('dragging');
+      grip.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    grip.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      setBlockHeight(block, Math.round(Math.max(70, Math.min(1500, startH + (e.clientY - startY)))));
+    });
+    function endDrag() {
+      if (!dragging) return;
+      dragging = false;
+      grip.classList.remove('dragging');
+      const all = loadBlockHeights();
+      all[id] = block.classList.contains('block-sized') ? parseInt(block.style.getPropertyValue('--bh'), 10) : 0;
+      try { localStorage.setItem(BLOCK_HEIGHT_KEY, JSON.stringify(all)); } catch (e) { /* 무시 */ }
+    }
+    grip.addEventListener('pointerup', endDrag);
+    grip.addEventListener('pointercancel', endDrag);
+    grip.addEventListener('dblclick', () => {
+      setBlockHeight(block, 0);
+      const all = loadBlockHeights();
+      delete all[id];
+      try { localStorage.setItem(BLOCK_HEIGHT_KEY, JSON.stringify(all)); } catch (e) { /* 무시 */ }
+    });
+  });
+})();
 
 /* ===== 오늘의 일정 (좌측 패널, 달력을 클릭하지 않아도 오늘 등록된 내용을 바로 확인) ===== */
 function renderAgendaInto(dateKey, boxId, emptyText) {
@@ -5955,7 +6063,16 @@ function addAgendaDayCard(container, dateKey, titleText, holderId, emptyText, ca
 
   const title = document.createElement('div');
   title.className = 'memo-panel-title agenda-day-card-title';
-  title.textContent = titleText;
+  // "오늘"이라는 글자에는 손글씨 동그라미를 그려서 눈에 띄게
+  if (titleText.startsWith('오늘')) {
+    const circled = document.createElement('span');
+    circled.className = 'agenda-today-circle';
+    circled.textContent = '오늘';
+    title.appendChild(circled);
+    title.appendChild(document.createTextNode(titleText.slice(2)));
+  } else {
+    title.textContent = titleText;
+  }
   card.appendChild(title);
 
   const holder = document.createElement('div');
@@ -5982,13 +6099,13 @@ function renderSelectedAgenda() {
 
   if (key !== todayKey) {
     const [y, m, d] = key.split('-').map(Number);
-    addAgendaDayCard(box, key, `📋 ${m}월 ${d}일의 일정`, 'agendaDay0', '등록된 일정이 없어요.', null);
+    addAgendaDayCard(box, key, `${m}월 ${d}일의 일정`, 'agendaDay0', '등록된 일정이 없어요.', null);
     return;
   }
 
   if (isAgendaDesktopLayout()) {
     // PC는 원래 그대로: 오늘 일정 카드 하나만
-    addAgendaDayCard(box, todayKey, '📋 오늘의 일정', 'agendaDay0', '등록된 일정이 없어요.', null);
+    addAgendaDayCard(box, todayKey, '오늘의 일정', 'agendaDay0', '등록된 일정이 없어요.', null);
     return;
   }
 
@@ -6000,7 +6117,7 @@ function renderSelectedAgenda() {
     t.setDate(t.getDate() + i);
     const dKey = keyOf(t.getFullYear(), t.getMonth(), t.getDate());
     const w = AGENDA_WEEKDAYS[t.getDay()];
-    const titleText = `📋 ${labels[i]} · ${t.getMonth() + 1}월 ${t.getDate()}일(${w})`;
+    const titleText = `${labels[i]} · ${t.getMonth() + 1}월 ${t.getDate()}일(${w})`;
     addAgendaDayCard(box, dKey, titleText, `agendaDay${i}`, `${shortLabels[i]} 등록된 일정이 없어요.`, modifiers[i]);
   }
 }
