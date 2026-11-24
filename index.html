@@ -748,6 +748,44 @@
     text-decoration: line-through;
     opacity: 0.6;
   }
+  /* 할일 보류/취소 상태 */
+  .todo-hold-preview { opacity: 0.75; font-style: italic; }
+  .todo-cancel-preview { text-decoration: line-through; text-decoration-color: #e06565; opacity: 0.45; }
+  .todo-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 15px; height: 15px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1;
+    color: #fff;
+    cursor: pointer;
+    font-style: normal;
+  }
+  .todo-mark--hold { background: #f0a020; }
+  .todo-mark--cancel { background: #e06565; }
+  .memo-item-todo-row .todo-mark { width: 18px; height: 18px; font-size: 11px; }
+  .agenda-item .todo-mark { margin-top: 2px; }
+  .todo-state-bar { display: flex; gap: 6px; margin-top: 8px; }
+  .todo-state-bar button {
+    flex: 1 1 0;
+    font-family: inherit;
+    font-size: 12.5px;
+    padding: 5px 0;
+    border-radius: 8px;
+    border: 1px solid #d3e0e8;
+    background: #fff;
+    color: #4a6577;
+    cursor: pointer;
+  }
+  .todo-state-bar button.active[data-state="done"] { background: #3d8fc0; border-color: #3d8fc0; color: #fff; }
+  .todo-state-bar button.active[data-state="hold"] { background: #f0a020; border-color: #f0a020; color: #fff; }
+  .todo-state-bar button.active[data-state="cancel"] { background: #e06565; border-color: #e06565; color: #fff; }
+  /* 일정을 입력한 날짜 (작게) */
+  .item-created-date { display: block; margin-top: 3px; font-size: 11px; color: #9fb3c0; font-weight: 400; font-style: normal; }
   .memo-preview.todo-preview {
     display: flex;
     flex-wrap: wrap; /* 좁은 칸에서는 체크박스 밑으로 글자가 내려가게 함 */
@@ -3584,16 +3622,21 @@ function buildMonthBlock(year, month) {
               prow.className = 'memo-preview todo-preview';
               prow.dataset.idx = itemIdx;
               if (it.bgColor) prow.style.backgroundColor = it.bgColor;
-              const cb = document.createElement('input');
-              cb.type = 'checkbox';
-              cb.checked = !!it.done;
-              cb.addEventListener('click', (ev) => {
-                ev.stopPropagation();
-                toggleMemoTodoDone(k, itemIdx, cb.checked);
-              });
+              let cb;
+              if (it.todoState) {
+                cb = makeTodoMark(it, () => setMemoTodoState(k, itemIdx, null));
+              } else {
+                cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.checked = !!it.done;
+                cb.addEventListener('click', (ev) => {
+                  ev.stopPropagation();
+                  toggleMemoTodoDone(k, itemIdx, cb.checked);
+                });
+              }
               const txt = document.createElement('span');
               txt.textContent = (it.alarmTime ? '⏰ ' : '') + (it.isDday && it.ddayTarget ? '[' + computeDdayLabel(it.ddayTarget) + '] ' : '') + previewLabel(it);
-              if (it.done) txt.classList.add('todo-done-preview');
+              if (todoTextClass(it)) txt.classList.add(todoTextClass(it));
               if (it.color) txt.style.color = it.color;
               prow.appendChild(cb);
               prow.appendChild(txt);
@@ -3703,8 +3746,9 @@ function buildMonthBlock(year, month) {
             label.style.backgroundColor = fillColor;
             label.dataset.date = seg.startK;
             label.dataset.idx = (memos[seg.startK] || []).indexOf(seg.item);
-            label.textContent = seg.item.isTodo ? (seg.item.done ? '☑ ' : '☐ ') + (seg.item.title || firstLine(seg.item.text)) : (seg.item.title || firstLine(seg.item.text));
-            if (seg.item.isTodo && seg.item.done) label.classList.add('todo-done-preview');
+            const todoPrefix = seg.item.todoState === 'hold' ? '⏸ ' : seg.item.todoState === 'cancel' ? '✕ ' : seg.item.done ? '☑ ' : '☐ ';
+            label.textContent = seg.item.isTodo ? todoPrefix + (seg.item.title || firstLine(seg.item.text)) : (seg.item.title || firstLine(seg.item.text));
+            if (todoTextClass(seg.item)) label.classList.add(todoTextClass(seg.item));
             wrap.appendChild(label);
             // seg 변수는 이 forEach 반복이 진행되면서 계속 재사용/변경되므로, 길게 누르기가
             // 실제로 발동하는(나중) 시점에 엉뚱한 값을 읽지 않도록 지금 값을 따로 붙잡아둠.
@@ -4296,6 +4340,59 @@ function toggleMemoTodoDone(key, idx, done) {
   if (item.checkId) checkListStore.setDone(item.checkId, done);
 }
 
+/* 할일 상태: 완료(done) / 보류(hold) / 취소(cancel) / 없음(null). 보류·취소는 todoState에 저장하고 done은 false로 둠 */
+function setMemoTodoState(key, idx, state) {
+  const item = memos[key][idx];
+  const apply = (it) => {
+    it.done = state === 'done';
+    if (state === 'hold' || state === 'cancel') it.todoState = state;
+    else delete it.todoState;
+  };
+  if (item.groupId && confirm('이 기간 전체에 적용할까요?\n확인: 기간 전체 적용 / 취소: 이 날짜만 적용')) {
+    Object.keys(memos).forEach((k) => memos[k].forEach((it) => { if (it.groupId === item.groupId) apply(it); }));
+  } else {
+    apply(item);
+  }
+  saveMemos();
+  renderCalendar();
+  updateDdayWidget();
+  renderSelectedAgenda();
+  if (item.checkId) checkListStore.setDone(item.checkId, state === 'done');
+}
+function todoTextClass(it) {
+  if (!it.isTodo) return '';
+  if (it.todoState === 'cancel') return 'todo-cancel-preview';
+  if (it.todoState === 'hold') return 'todo-hold-preview';
+  return it.done ? 'todo-done-preview' : '';
+}
+/* 보류/취소인 할일은 체크박스 대신 ⏸ / ✕ 표시 (누르면 보류·취소가 풀림) */
+function makeTodoMark(it, onClear) {
+  const mark = document.createElement('i'); // span이 아닌 i: 달력 칸·수정 기능의 span 규칙에 안 걸리게
+  mark.className = 'todo-mark todo-mark--' + it.todoState;
+  mark.textContent = it.todoState === 'hold' ? '⏸' : '✕';
+  mark.title = (it.todoState === 'hold' ? '보류' : '취소') + ' (누르면 풀기)';
+  mark.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); onClear(); });
+  return mark;
+}
+/* 입력한 날짜: 새로 입력한 일정은 createdAt, 예전 일정은 순서값(order, 입력 시각 기반)에서 추정 */
+function itemCreatedMs(it) {
+  if (it.createdAt) return it.createdAt;
+  if (it.checkId) {
+    const ms = parseInt(String(it.checkId).slice(1, -4), 36);
+    if (ms > 1e12) return ms;
+  }
+  return it.order > 1e12 && it.order < 4e12 ? it.order : null;
+}
+function makeCreatedDateEl(it) {
+  const ms = itemCreatedMs(it);
+  if (!ms) return null;
+  const d = new Date(ms);
+  const el = document.createElement('small');
+  el.className = 'item-created-date';
+  el.textContent = `${String(d.getFullYear()).slice(2)}.${d.getMonth() + 1}.${d.getDate()} 입력`;
+  return el;
+}
+
 function formatShortDate(key) {
   const [y, m, d] = key.split('-').map(Number);
   return `${y}.${m}.${d}`;
@@ -4468,25 +4565,50 @@ function buildMemoItemCard(key, idx, refreshFn) {
   if (item.isTodo) {
     const todoRow = document.createElement('label');
     todoRow.className = 'memo-item-todo-row';
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = !!item.done;
-    cb.addEventListener('change', () => {
-      toggleMemoTodoDone(key, idx, cb.checked);
-    });
+    let cb;
+    if (item.todoState) {
+      cb = makeTodoMark(item, () => { setMemoTodoState(key, idx, null); if (refreshFn) refreshFn(); });
+    } else {
+      cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = !!item.done;
+      cb.addEventListener('change', () => {
+        toggleMemoTodoDone(key, idx, cb.checked);
+        if (refreshFn) refreshFn();
+      });
+    }
     const span = document.createElement('span');
     span.textContent = (item.alarmTime ? '⏰ ' + item.alarmTime + ' ' : '') + (item.isDday && item.ddayTarget ? '[' + computeDdayLabel(item.ddayTarget) + '] ' : '') + item.text;
-    if (item.done) span.classList.add('todo-done-preview');
+    if (todoTextClass(item)) span.classList.add(todoTextClass(item));
     if (item.color) span.style.color = item.color;
     todoRow.appendChild(cb);
     todoRow.appendChild(span);
     textWrap.appendChild(todoRow);
+    // 완료 / 보류 / 취소 버튼 (켜져 있는 걸 한 번 더 누르면 풀림)
+    const stateBar = document.createElement('div');
+    stateBar.className = 'todo-state-bar';
+    const current = item.todoState || (item.done ? 'done' : null);
+    [['done', '✓ 완료'], ['hold', '⏸ 보류'], ['cancel', '✕ 취소']].forEach(([st, label]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.state = st;
+      b.textContent = label;
+      if (current === st) b.classList.add('active');
+      b.addEventListener('click', () => {
+        setMemoTodoState(key, idx, current === st ? null : st);
+        if (refreshFn) refreshFn();
+      });
+      stateBar.appendChild(b);
+    });
+    textWrap.appendChild(stateBar);
   } else {
     const span = document.createElement('span');
     span.textContent = (item.alarmTime ? '⏰ ' + item.alarmTime + ' ' : '') + (item.isDday && item.ddayTarget ? '[' + computeDdayLabel(item.ddayTarget) + '] ' : '') + item.text;
     if (item.color) span.style.color = item.color;
     textWrap.appendChild(span);
   }
+  const createdEl = makeCreatedDateEl(item);
+  if (createdEl) textWrap.appendChild(createdEl);
   if (item.bgColor) {
     textWrap.style.backgroundColor = item.bgColor;
     textWrap.style.borderRadius = '8px';
@@ -5611,7 +5733,7 @@ function registerRange(startKey, endKey, text, color, bgColor, isTodo, alarmTime
   while (cur <= e && count < 400) {
     const k = keyOf(cur.getFullYear(), cur.getMonth(), cur.getDate());
     if (!memos[k]) memos[k] = [];
-    memos[k].push({ text, title: title || null, groupId, start: startK, end: endK, color: color || null, bgColor: bgColor || null, isTodo: !!isTodo, done: false, alarmTime: alarmTime || null, alarmFired: false, isDday: !!isDday, ddayTarget: isDday ? endK : null, image: image || null, order: groupOrder });
+    memos[k].push({ text, title: title || null, groupId, start: startK, end: endK, color: color || null, bgColor: bgColor || null, isTodo: !!isTodo, done: false, alarmTime: alarmTime || null, alarmFired: false, isDday: !!isDday, ddayTarget: isDday ? endK : null, image: image || null, order: groupOrder, createdAt: Date.now() });
     cur.setDate(cur.getDate() + 1);
     count++;
   }
@@ -5694,7 +5816,7 @@ document.getElementById('addBtn').addEventListener('click', () => {
   const repeatMode = repeatSelect.value;
   if (repeatMode === 'none') {
     if (!memos[normalized]) memos[normalized] = [];
-    memos[normalized].push({ text: rawText, title: titleValue, groupId: null, start: null, end: null, color: selectedColor, bgColor: selectedBgColor, isTodo: todoToggle.checked, done: false, alarmTime: alarmTimeValue, alarmFired: false, isDday: ddayValue, ddayTarget: ddayValue ? normalized : null, image: pendingImageData, order: nextOrder() });
+    memos[normalized].push({ text: rawText, title: titleValue, groupId: null, start: null, end: null, color: selectedColor, bgColor: selectedBgColor, isTodo: todoToggle.checked, done: false, alarmTime: alarmTimeValue, alarmFired: false, isDday: ddayValue, ddayTarget: ddayValue ? normalized : null, image: pendingImageData, order: nextOrder(), createdAt: Date.now() });
     saveMemos();
   } else {
     const untilKey = repeatUntilInput.value.trim() ? normalizeDate(repeatUntilInput.value) : null;
@@ -5711,7 +5833,7 @@ document.getElementById('addBtn').addEventListener('click', () => {
       const k = keyOf(cur.getFullYear(), cur.getMonth(), cur.getDate());
       if (untilDate && cur > untilDate) break;
       if (!memos[k]) memos[k] = [];
-      memos[k].push({ text: rawText, title: titleValue, groupId: null, start: null, end: null, color: selectedColor, bgColor: selectedBgColor, isTodo: todoToggle.checked, done: false, alarmTime: alarmTimeValue, alarmFired: false, isDday: false, ddayTarget: null, repeatId, image: pendingImageData, order: nextOrder() });
+      memos[k].push({ text: rawText, title: titleValue, groupId: null, start: null, end: null, color: selectedColor, bgColor: selectedBgColor, isTodo: todoToggle.checked, done: false, alarmTime: alarmTimeValue, alarmFired: false, isDday: false, ddayTarget: null, repeatId, image: pendingImageData, order: nextOrder(), createdAt: Date.now() });
       if (repeatMode === 'weekly') {
         cur.setDate(cur.getDate() + 7);
       } else {
@@ -6096,7 +6218,9 @@ function renderAgendaInto(dateKey, boxId, emptyText) {
     const it = rawItems[idx];
     const row = document.createElement('div');
     row.className = 'agenda-item';
-    if (it.isTodo) {
+    if (it.isTodo && it.todoState) {
+      row.appendChild(makeTodoMark(it, () => setMemoTodoState(dateKey, idx, null)));
+    } else if (it.isTodo) {
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.checked = !!it.done;
@@ -6118,9 +6242,11 @@ function renderAgendaInto(dateKey, boxId, emptyText) {
     const txt = document.createElement('span');
     txt.className = 'agenda-item-text';
     txt.textContent = (it.image ? '📷 ' : '') + (it.alarmTime ? '⏰ ' + it.alarmTime + ' ' : '') + (it.isDday && it.ddayTarget ? '[' + computeDdayLabel(it.ddayTarget) + '] ' : '') + it.text;
-    if (it.isTodo && it.done) txt.classList.add('todo-done-preview');
+    if (todoTextClass(it)) txt.classList.add(todoTextClass(it));
     if (it.color) txt.style.color = it.color;
     contentWrap.appendChild(txt);
+    const agendaCreated = makeCreatedDateEl(it);
+    if (agendaCreated) contentWrap.appendChild(agendaCreated);
     row.appendChild(contentWrap);
     if (it.bgColor) {
       row.style.backgroundColor = it.bgColor;
