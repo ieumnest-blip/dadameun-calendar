@@ -4015,7 +4015,7 @@ function deleteRangeGroup(groupId) {
   saveMemos();
 }
 
-function applyMemoContent(key, idx, newText) {
+function applyMemoContent(key, idx, newText, allRepeats) {
   const item = memos[key][idx];
   const trimmedText = newText.trim();
   if (!trimmedText && !item.title) { alert('제목이나 내용 중 하나는 입력해주세요.'); return; }
@@ -4023,6 +4023,10 @@ function applyMemoContent(key, idx, newText) {
   if (item.groupId) {
     Object.keys(memos).forEach((k) => {
       memos[k].forEach((it) => { if (it.groupId === item.groupId) it.text = trimmedText; });
+    });
+  } else if (allRepeats && item.repeatId) {
+    Object.keys(memos).forEach((k) => {
+      memos[k].forEach((it) => { if (it.repeatId === item.repeatId) it.text = trimmedText; });
     });
   } else {
     item.text = trimmedText;
@@ -4033,13 +4037,17 @@ function applyMemoContent(key, idx, newText) {
   refreshMemoPopup(key, idx);
 }
 
-function applyMemoTitle(key, idx, newTitle) {
+function applyMemoTitle(key, idx, newTitle, allRepeats) {
   const item = memos[key][idx];
   const trimmedTitle = newTitle.trim();
 
   if (item.groupId) {
     Object.keys(memos).forEach((k) => {
       memos[k].forEach((it) => { if (it.groupId === item.groupId) it.title = trimmedTitle || null; });
+    });
+  } else if (allRepeats && item.repeatId) {
+    Object.keys(memos).forEach((k) => {
+      memos[k].forEach((it) => { if (it.repeatId === item.repeatId) it.title = trimmedTitle || null; });
     });
   } else {
     item.title = trimmedTitle || null;
@@ -4811,8 +4819,12 @@ function buildMemoItemCard(key, idx, refreshFn) {
     const newText = editing.bodyEl.innerText.replace(/\n+$/g, '');
     // 제목만 있는 일정(내용 없이 제목+알람만 등록한 경우 등)도 고칠 수 있게: 제목이나 내용 중 하나만 있으면 됨
     if (!newText.trim() && !newTitle.trim()) { alert('제목이나 내용 중 하나는 입력해주세요.'); return; }
-    applyMemoTitle(key, idx, newTitle);
-    applyMemoContent(key, idx, newText);
+    // 반복 일정이면 모든 회차를 같이 고칠지 물어봄 (기본은 전체)
+    const allRepeats = item.repeatId
+      ? confirm('반복 일정이에요. 모든 회차를 같이 수정할까요?\n확인: 반복 전체 수정 / 취소: 이 날짜만 수정')
+      : false;
+    applyMemoTitle(key, idx, newTitle, allRepeats);
+    applyMemoContent(key, idx, newText, allRepeats);
   });
   cancelEditBtn.addEventListener('click', () => endEdit(true));
   actions.appendChild(editBtn);
