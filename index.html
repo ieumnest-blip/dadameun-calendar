@@ -4315,11 +4315,15 @@ let openColorPickerState = null; // { key, idx, field } - 색상 팔레트를 �
 const COLOR_PRESETS = ['', '#ffd23c', '#f4a83a', '#e06565', '#c2255c', '#5fbf7a', '#7a8b3f', '#a8d94f', '#4fd1c5', '#22c1c3', '#6ec3e8', '#3d8fc0', '#3b5bdb', '#5b4fc7', '#a880e0', '#b8a9e3', '#e07fb8', '#ff8c69', '#a67c52', '#8a95a0', '#4a4a4a', '#b5a642'];
 const EMOJI_PRESETS = ['⭐', '❗', '✅', '🎉', '📌', '🔥', '💡', '⚡', '📞', '🩷', '🤍', '🩵', '🤩', '💎', '🎯'];
 
-function changeMemoColor(key, idx, field, color) {
+function changeMemoColor(key, idx, field, color, allRepeats) {
   const item = memos[key][idx];
   if (item.groupId) {
     Object.keys(memos).forEach((k) => {
       memos[k].forEach((it) => { if (it.groupId === item.groupId) it[field] = color || null; });
+    });
+  } else if (allRepeats && item.repeatId) {
+    Object.keys(memos).forEach((k) => {
+      memos[k].forEach((it) => { if (it.repeatId === item.repeatId) it[field] = color || null; });
     });
   } else {
     item[field] = color || null;
@@ -4970,8 +4974,13 @@ function buildMemoItemCard(key, idx, refreshFn) {
       if (c) sw.style.background = c;
       if ((item[field] || '') === c) sw.classList.add('active');
       sw.addEventListener('click', () => {
-        openColorPickerState = { key, idx, field, original };
-        changeMemoColor(key, idx, field, c);
+        // 반복 일정이면 팔레트를 연 뒤 처음 색을 고를 때 한 번만 "모든 회차에 같이?"를 물어보고 기억함
+        let allRepeats = openColorPickerState && openColorPickerState.field === field ? openColorPickerState.allRepeats : undefined;
+        if (item.repeatId && allRepeats === undefined) {
+          allRepeats = confirm('반복 일정이에요. 모든 회차의 ' + label + '을 같이 바꿀까요?\n확인: 반복 전체 / 취소: 이 날짜만');
+        }
+        openColorPickerState = { key, idx, field, original, allRepeats };
+        changeMemoColor(key, idx, field, c, allRepeats);
       });
       picker.appendChild(sw);
     });
