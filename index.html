@@ -4198,6 +4198,29 @@ function moveRangeGroup(groupId, newStartKey, newEndKey) {
   return startK;
 }
 
+/* 하루짜리 일정을 기간 일정으로: 원래 항목을 지우고 같은 내용·색·할일·알람으로 기간을 새로 등록 */
+function convertMemoToRange(key, idx, newStart, newEnd) {
+  const item = memos[key][idx];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(newStart) || !/^\d{4}-\d{2}-\d{2}$/.test(newEnd)) {
+    alert('날짜 형식이 올바르지 않아요. 예: 2026-09-11');
+    return;
+  }
+  if (newStart === newEnd) { alert('종료일을 시작일과 다른 날로 골라주세요.'); return; }
+  memos[key].splice(idx, 1);
+  if (memos[key].length === 0) delete memos[key];
+  registerRange(newStart, newEnd, item.text, item.color, item.bgColor, item.isTodo, item.alarmTime, item.isDday, item.image, item.title);
+  const s = newStart < newEnd ? newStart : newEnd;
+  const fresh = (memos[s] || []).filter((it) => it.groupId).sort((a, b) => (b.order || 0) - (a.order || 0))[0];
+  if (fresh && item.createdAt) {
+    Object.keys(memos).forEach((k) => memos[k].forEach((it) => { if (it.groupId === fresh.groupId) it.createdAt = item.createdAt; }));
+    saveMemos();
+  }
+  renderCalendar();
+  updateDdayWidget();
+  renderSelectedAgenda();
+  if (fresh) refreshMemoPopup(s, memos[s].indexOf(fresh));
+}
+
 function applyMemoPeriod(key, idx, newStart, newEnd) {
   const item = memos[key][idx];
   if (!/^\d{4}-\d{2}-\d{2}$/.test(newStart) || !/^\d{4}-\d{2}-\d{2}$/.test(newEnd)) {
@@ -5016,10 +5039,8 @@ function buildMemoItemCard(key, idx, refreshFn) {
   });
   actions.appendChild(convertBtn);
 
-  if (item.groupId) {
-    const editPeriodBtn = document.createElement('button');
-    editPeriodBtn.textContent = '기간수정';
-    editPeriodBtn.addEventListener('click', () => {
+  // 시작일·종료일을 고르는 작은 입력칸 (기간수정 / 일정→기간 에서 같이 씀)
+  function openPeriodEditor(startVal, endVal, onSave) {
       const existing = div.querySelector('.memo-inline-editor-기간수정');
       if (existing) { existing.remove(); return; }
       closeInlineExtras();
@@ -5034,7 +5055,7 @@ function buildMemoItemCard(key, idx, refreshFn) {
       const startField = document.createElement('input');
       startField.type = 'date';
       startField.className = 'memo-inline-editor-field';
-      startField.value = item.start;
+      startField.value = startVal;
       startWrap.appendChild(startLabel);
       startWrap.appendChild(startField);
       const endWrap = document.createElement('div');
@@ -5044,7 +5065,7 @@ function buildMemoItemCard(key, idx, refreshFn) {
       const endField = document.createElement('input');
       endField.type = 'date';
       endField.className = 'memo-inline-editor-field';
-      endField.value = item.end;
+      endField.value = endVal;
       endWrap.appendChild(endLabel);
       endWrap.appendChild(endField);
       row.appendChild(startWrap);
@@ -5056,7 +5077,7 @@ function buildMemoItemCard(key, idx, refreshFn) {
       saveBtn.type = 'button';
       saveBtn.className = 'btn-inline-save';
       saveBtn.textContent = '저장';
-      saveBtn.addEventListener('click', () => applyMemoPeriod(key, idx, startField.value, endField.value));
+      saveBtn.addEventListener('click', () => onSave(startField.value, endField.value));
       const cancelBtn = document.createElement('button');
       cancelBtn.type = 'button';
       cancelBtn.className = 'btn-inline-cancel';
@@ -5066,8 +5087,20 @@ function buildMemoItemCard(key, idx, refreshFn) {
       actionsRow.appendChild(cancelBtn);
       wrap.appendChild(actionsRow);
       div.appendChild(wrap);
-    });
+      endField.focus();
+  }
+  if (item.groupId) {
+    const editPeriodBtn = document.createElement('button');
+    editPeriodBtn.textContent = '기간수정';
+    editPeriodBtn.addEventListener('click', () => openPeriodEditor(item.start, item.end, (st, en) => applyMemoPeriod(key, idx, st, en)));
     actions.appendChild(editPeriodBtn);
+  } else {
+    // 하루짜리 일정을 여러 날에 걸친 기간 일정으로 바꾸기
+    const toRangeBtn = document.createElement('button');
+    toRangeBtn.textContent = '일정→기간';
+    toRangeBtn.title = '종료일을 골라서 기간 일정으로 바꾸기';
+    toRangeBtn.addEventListener('click', () => openPeriodEditor(key, key, (st, en) => convertMemoToRange(key, idx, st, en)));
+    actions.appendChild(toRangeBtn);
   }
 
   function makeCompareDot(value) {
