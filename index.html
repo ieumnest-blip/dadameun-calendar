@@ -635,15 +635,20 @@
     border-radius: 2px;
     transform: rotate(-3deg);
   }
-  body.mark-fill td.has-memo:not(.today):not([data-mark]) .day-num, td.has-memo[data-mark="fill"]:not(.today) .day-num, .mark-preview--fill .day-num { isolation: isolate; }
-  body.mark-fill td.has-memo:not(.today):not([data-mark]) .day-num::after, td.has-memo[data-mark="fill"]:not(.today) .day-num::after, .mark-preview--fill .day-num::after {
+  /* 아이콘: 날짜 숫자 오른쪽 위에 고른 이모지를 붙임 (이모지는 .day-num의 data-mark-icon) */
+  body.mark-icon td.has-memo:not(.today):not([data-mark]) .day-num::after, td.has-memo[data-mark="icon"]:not(.today) .day-num::after, .mark-preview--icon .day-num::after {
+    content: attr(data-mark-icon);
+    top: -4px; right: -17px; bottom: auto; left: auto;
     border: none;
-    background: var(--memo-color, #3fa0d8);
-    opacity: 0.22;
-    border-radius: 50%;
-    transform: none;
-    z-index: -1;
+    font-size: 13px;
+    line-height: 1;
+    transform: rotate(10deg);
   }
+  .mark-icon-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; padding: 4px 2px 2px; }
+  .mark-style-picker .mark-icon-grid button, .memo-item .mark-icon-grid button {
+    width: auto; justify-content: center; padding: 5px 0; font-size: 17px; background: transparent; border-radius: 8px;
+  }
+  .mark-style-picker .mark-icon-grid button.active, .memo-item .mark-icon-grid button.active { background: #e4f1fa; }
   body.mark-none td.has-memo:not(.today):not([data-mark]) .day-num::after, td.has-memo[data-mark="none"]:not(.today) .day-num::after, .mark-preview--none .day-num::after { display: none; }
   .mark-style-picker {
     position: fixed;
@@ -3675,6 +3680,7 @@ function buildMonthBlock(year, month) {
           // 일정마다 따로 고른 표시 방법이 있으면 그 칸은 그걸로 (여러 개면 위쪽 일정 것), 없으면 ⭕ 전체 설정
           const marked = normalItems.find((it) => it.markStyle);
           if (marked) td.dataset.mark = marked.markStyle;
+          td.dataset.markIcon = (marked && marked.markStyle === 'icon' && marked.markIcon) || globalMarkIcon();
           const colorSrc = marked || normalItems[0];
           if (colorSrc.bgColor) td.style.setProperty('--memo-color', colorSrc.bgColor);
         }
@@ -3697,6 +3703,7 @@ function buildMonthBlock(year, month) {
         const dNum = document.createElement('span');
         dNum.className = 'day-num';
         dNum.textContent = day;
+        if (td.dataset.markIcon) dNum.dataset.markIcon = td.dataset.markIcon;
         td.appendChild(dNum);
 
         if (holidayName) {
@@ -4438,9 +4445,12 @@ let openColorPickerState = null; // { key, idx, field } - 색상 팔레트를 �
 const COLOR_PRESETS = ['', '#ffd23c', '#f4a83a', '#e06565', '#c2255c', '#5fbf7a', '#7a8b3f', '#a8d94f', '#4fd1c5', '#22c1c3', '#6ec3e8', '#3d8fc0', '#3b5bdb', '#5b4fc7', '#a880e0', '#b8a9e3', '#e07fb8', '#ff8c69', '#a67c52', '#8a95a0', '#4a4a4a', '#b5a642'];
 const EMOJI_PRESETS = ['⭐', '❗', '✅', '🎉', '📌', '🔥', '💡', '⚡', '📞', '🩷', '🤍', '🩵', '🤩', '💎', '🎯'];
 
-function setMemoMarkStyle(key, idx, style) {
+function setMemoMarkStyle(key, idx, style, icon) {
   const item = memos[key][idx];
-  const apply = (it) => { if (style) it.markStyle = style; else delete it.markStyle; };
+  const apply = (it) => {
+    if (style) it.markStyle = style; else delete it.markStyle;
+    if (style === 'icon') it.markIcon = icon; else delete it.markIcon;
+  };
   if (item.repeatId && confirm('반복 일정이에요. 모든 회차의 날짜 표시를 같이 바꿀까요?\n확인: 반복 전체 / 취소: 이 날짜만')) {
     Object.keys(memos).forEach((k) => memos[k].forEach((it) => { if (it.repeatId === item.repeatId) apply(it); }));
   } else {
@@ -5268,14 +5278,30 @@ function buildMemoItemCard(key, idx, refreshFn) {
     lab.className = 'item-mark-label';
     lab.textContent = '날짜 표시';
     markRow.appendChild(lab);
-    const MARK_ICONS = { '': '전체 설정', circle: '⭕ 동그라미', dot: '• 점', underline: '＿ 밑줄', fill: '◐ 색칠', none: '✕ 없음' };
+    const MARK_ICONS = { '': '전체 설정', circle: '⭕ 동그라미', dot: '• 점', underline: '＿ 밑줄', icon: (item.markStyle === 'icon' && item.markIcon ? item.markIcon : '🏷') + ' 아이콘', none: '✕ 없음' };
+    let iconGrid = null;
     [['', '전체 설정'], ...MARK_STYLES].forEach(([k, label]) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.title = k ? label : '⭕ 버튼에서 고른 전체 설정을 따름';
       if ((item.markStyle || '') === k) b.classList.add('active');
       b.textContent = MARK_ICONS[k];
-      b.addEventListener('click', () => setMemoMarkStyle(key, idx, k));
+      b.addEventListener('click', () => {
+        if (k !== 'icon') { setMemoMarkStyle(key, idx, k); return; }
+        // 아이콘은 붙일 이모지를 먼저 고름
+        if (iconGrid) { iconGrid.remove(); iconGrid = null; return; }
+        iconGrid = document.createElement('div');
+        iconGrid.className = 'mark-icon-grid';
+        EMOJI_PRESETS.forEach((em) => {
+          const eb = document.createElement('button');
+          eb.type = 'button';
+          eb.textContent = em;
+          if (item.markStyle === 'icon' && item.markIcon === em) eb.classList.add('active');
+          eb.addEventListener('click', () => setMemoMarkStyle(key, idx, 'icon', em));
+          iconGrid.appendChild(eb);
+        });
+        markRow.after(iconGrid);
+      });
       markRow.appendChild(b);
     });
     div.appendChild(markRow);
@@ -6825,7 +6851,10 @@ document.getElementById('todayJumpBtn').addEventListener('click', () => {
 
 /* ===== 일정 있는 날짜 표시 방법 고르기 (⭕ 버튼) - 클라우드에 같이 저장돼서 다른 기기에도 똑같이 ===== */
 const MARK_STYLE_KEY = 'yearlyCalendarDayMarkStyle';
-const MARK_STYLES = [['circle', '동그라미'], ['dot', '점'], ['underline', '밑줄'], ['fill', '색칠'], ['none', '표시 안 함']];
+const MARK_STYLES = [['circle', '동그라미'], ['dot', '점'], ['underline', '밑줄'], ['icon', '아이콘'], ['none', '표시 안 함']];
+const MARK_ICON_KEY = 'yearlyCalendarDayMarkIcon';
+// 달력이 처음 그려질 때(이 줄보다 먼저) 불릴 수도 있어서 상수 대신 키 문자열을 그대로 씀
+function globalMarkIcon() { return localStorage.getItem('yearlyCalendarDayMarkIcon') || '⭐'; }
 function applyMarkStyle() {
   const cur = localStorage.getItem(MARK_STYLE_KEY) || 'circle';
   MARK_STYLES.forEach(([k]) => document.body.classList.toggle('mark-' + k, k === cur && k !== 'circle'));
@@ -6856,6 +6885,7 @@ document.getElementById('markStyleBtn').addEventListener('click', () => {
     const pv = document.createElement('span');
     pv.className = 'mark-preview mark-preview--' + k;
     pv.innerHTML = '<span class="day-num">8</span>';
+    pv.firstChild.dataset.markIcon = globalMarkIcon();
     pv.classList.add('has-memo');
     b.appendChild(pv);
     b.appendChild(document.createTextNode(label));
@@ -6863,10 +6893,36 @@ document.getElementById('markStyleBtn').addEventListener('click', () => {
       localStorage.setItem(MARK_STYLE_KEY, k);
       pushToCloud();
       applyMarkStyle();
+      renderCalendar();
+      if (k === 'icon') { picker.querySelectorAll(':scope > button').forEach((x) => x.classList.toggle('active', x === b)); return; }
       closeMarkStylePicker();
     });
     picker.appendChild(b);
   });
+  // 아이콘으로 표시할 때 붙일 이모지 고르기
+  const iconTitle = document.createElement('div');
+  iconTitle.className = 'mark-style-picker-title';
+  iconTitle.style.marginTop = '8px';
+  iconTitle.textContent = '아이콘 고르기';
+  picker.appendChild(iconTitle);
+  const grid = document.createElement('div');
+  grid.className = 'mark-icon-grid';
+  EMOJI_PRESETS.forEach((em) => {
+    const eb = document.createElement('button');
+    eb.type = 'button';
+    eb.textContent = em;
+    if (em === globalMarkIcon()) eb.classList.add('active');
+    eb.addEventListener('click', () => {
+      localStorage.setItem(MARK_ICON_KEY, em);
+      localStorage.setItem(MARK_STYLE_KEY, 'icon');
+      pushToCloud();
+      applyMarkStyle();
+      renderCalendar();
+      closeMarkStylePicker();
+    });
+    grid.appendChild(eb);
+  });
+  picker.appendChild(grid);
   document.body.appendChild(picker);
   const r = document.getElementById('markStyleBtn').getBoundingClientRect();
   picker.style.top = (r.bottom + 6) + 'px';
