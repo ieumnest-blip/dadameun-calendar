@@ -1458,9 +1458,15 @@
   .memo-item button.btn-del-range {
     background: #ffe3b0; color: #a86a1f;
   }
+  .memo-del-row { display: flex; gap: 6px; }
+  .memo-del-row button { flex: 1 1 0; padding: 6px 8px; font-size: 12.5px; font-weight: 700; }
   .memo-item button.btn-del-one {
-    background: #ffe1e1; color: #c43c3c; font-weight: 700;
+    background: #ffe1e1; color: #c43c3c;
     box-shadow: inset 0 0 0 1px #f3b4b4;
+  }
+  .memo-item button.btn-del-all {
+    background: #fff0d6; color: #b5651d;
+    box-shadow: inset 0 0 0 1px #f2cf9a;
   }
   /* 수정 중일 때 "저장"은 팝업 아래 "닫기" 왼쪽에 크게 */
   .modal-edit-footer { display: flex; justify-content: center; gap: 8px; margin-top: 12px; }
@@ -4922,7 +4928,7 @@ function buildMemoItemCard(key, idx, refreshFn) {
 
   const convertBtn = document.createElement('button');
   convertBtn.type = 'button';
-  convertBtn.textContent = '전환';
+  convertBtn.textContent = '일정⮂할일';
   convertBtn.title = '일정 ↔ 할일 전환';
   convertBtn.addEventListener('click', () => {
     const existing = div.querySelector('.memo-inline-editor-전환');
@@ -5103,12 +5109,15 @@ function buildMemoItemCard(key, idx, refreshFn) {
     updateDdayWidget();
     if (refreshFn) refreshFn();
   });
-  actions.appendChild(delOneBtn);
+  // 삭제 버튼들은 따로 한 줄에 나란히 (모양은 같고 색만 다르게)
+  const delRow = document.createElement('div');
+  delRow.className = 'memo-del-row';
+  delRow.appendChild(delOneBtn);
 
   if (item.groupId) {
     const delAllBtn = document.createElement('button');
     delAllBtn.className = 'btn-del-range';
-    delAllBtn.textContent = '기간 전체 삭제';
+    delAllBtn.textContent = '🗑 기간 전체 삭제';
     delAllBtn.addEventListener('click', () => {
       if (!confirm('이 기간에 등록된 모든 날짜의 내용을 삭제할까요?')) return;
       deleteRangeGroup(item.groupId);
@@ -5116,13 +5125,14 @@ function buildMemoItemCard(key, idx, refreshFn) {
       updateDdayWidget();
       if (refreshFn) refreshFn();
     });
-    actions.appendChild(delAllBtn);
+    delAllBtn.className = 'btn-del-all';
+    delRow.appendChild(delAllBtn);
   }
 
   if (item.repeatId) {
     const delRepeatBtn = document.createElement('button');
     delRepeatBtn.className = 'btn-del-range';
-    delRepeatBtn.textContent = '반복 전체 삭제';
+    delRepeatBtn.textContent = '🗑 반복 전체 삭제';
     delRepeatBtn.addEventListener('click', () => {
       if (!confirm('이 반복 일정의 모든 회차를 삭제할까요?')) return;
       Object.keys(memos).forEach((k) => {
@@ -5134,10 +5144,12 @@ function buildMemoItemCard(key, idx, refreshFn) {
       updateDdayWidget();
       if (refreshFn) refreshFn();
     });
-    actions.appendChild(delRepeatBtn);
+    delRepeatBtn.className = 'btn-del-all';
+    delRow.appendChild(delRepeatBtn);
   }
 
   div.appendChild(actions);
+  div.appendChild(delRow);
   return div;
 }
 
