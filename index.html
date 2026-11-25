@@ -1299,6 +1299,22 @@
     margin-bottom: 4px;
   }
   .memo-item-text span { font-size: 22px; word-break: break-all; display: block; white-space: pre-line; }
+  /* 제목·내용 오른쪽 연필(✏️)을 누르면 그 자리에서 바로 수정 */
+  .memo-line { display: flex; align-items: flex-start; gap: 6px; }
+  .memo-line > .memo-item-title, .memo-line > .memo-item-body { flex: 1 1 auto; min-width: 0; }
+  .memo-item-todo-row .memo-item-body { flex: 1 1 auto; min-width: 0; }
+  .memo-item button.memo-pencil {
+    flex-shrink: 0;
+    background: transparent;
+    padding: 2px 4px;
+    font-size: 15px;
+    line-height: 1.2;
+    border-radius: 6px;
+    cursor: pointer;
+    opacity: 0.75;
+  }
+  .memo-item button.memo-pencil:hover { opacity: 1; background: #eef4f8; }
+  .memo-item.is-editing .memo-pencil { display: none; }
   .memo-item-thumb {
     max-width: 100%;
     max-height: 160px;
@@ -1441,6 +1457,19 @@
   }
   .memo-item button.btn-del-range {
     background: #ffe3b0; color: #a86a1f;
+  }
+  .memo-item button.btn-del-one {
+    background: #ffe1e1; color: #c43c3c; font-weight: 700;
+    box-shadow: inset 0 0 0 1px #f3b4b4;
+  }
+  /* 수정 중일 때 "저장"은 팝업 아래 "닫기" 왼쪽에 크게 */
+  .modal-edit-footer { display: flex; justify-content: center; gap: 8px; margin-top: 12px; }
+  .modal-edit-footer .close-btn { margin: 0 !important; }
+  .modal-edit-footer .modal-save-btn {
+    font-family: inherit;
+    background: #3d8fc0; color: #fff; border: none;
+    border-radius: 10px; padding: 8px 22px; font-size: 14px; font-weight: 700;
+    cursor: pointer;
   }
   .modal .close-btn {
     display: block; margin: 12px auto 0;
@@ -4569,12 +4598,25 @@ function buildMemoItemCard(key, idx, refreshFn) {
 
   const textWrap = document.createElement('div');
   textWrap.className = 'memo-item-text';
+  const makePencil = (which) => {
+    const pen = document.createElement('button');
+    pen.type = 'button';
+    pen.className = 'memo-pencil';
+    pen.textContent = '✏️';
+    pen.title = which === 'title' ? '제목 수정' : '내용 수정';
+    pen.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); startEdit(which); });
+    return pen;
+  };
   if (item.title) {
+    const titleLine = document.createElement('div');
+    titleLine.className = 'memo-line';
     const titleEl = document.createElement('div');
     titleEl.className = 'memo-item-title';
     titleEl.textContent = item.title;
     if (item.color) titleEl.style.color = item.color;
-    textWrap.appendChild(titleEl);
+    titleLine.appendChild(titleEl);
+    titleLine.appendChild(makePencil('title'));
+    textWrap.appendChild(titleLine);
   }
   if (item.isTodo) {
     const todoRow = document.createElement('label');
@@ -4592,11 +4634,13 @@ function buildMemoItemCard(key, idx, refreshFn) {
       });
     }
     const span = document.createElement('span');
+    span.className = 'memo-item-body';
     span.textContent = (item.alarmTime ? '⏰ ' + item.alarmTime + ' ' : '') + (item.isDday && item.ddayTarget ? '[' + computeDdayLabel(item.ddayTarget) + '] ' : '') + item.text;
     if (todoTextClass(item)) span.classList.add(todoTextClass(item));
     if (item.color) span.style.color = item.color;
     todoRow.appendChild(cb);
     todoRow.appendChild(span);
+    if (item.text || !item.title) todoRow.appendChild(makePencil('body'));
     textWrap.appendChild(todoRow);
     // 완료 / 보류 / 취소 버튼 (켜져 있는 걸 한 번 더 누르면 풀림)
     const stateBar = document.createElement('div');
@@ -4616,10 +4660,15 @@ function buildMemoItemCard(key, idx, refreshFn) {
     });
     textWrap.appendChild(stateBar);
   } else {
+    const bodyLine = document.createElement('div');
+    bodyLine.className = 'memo-line';
     const span = document.createElement('span');
+    span.className = 'memo-item-body';
     span.textContent = (item.alarmTime ? '⏰ ' + item.alarmTime + ' ' : '') + (item.isDday && item.ddayTarget ? '[' + computeDdayLabel(item.ddayTarget) + '] ' : '') + item.text;
     if (item.color) span.style.color = item.color;
-    textWrap.appendChild(span);
+    bodyLine.appendChild(span);
+    if (item.text || !item.title) bodyLine.appendChild(makePencil('body'));
+    textWrap.appendChild(bodyLine);
   }
   const createdEl = makeCreatedDateEl(item);
   if (createdEl) textWrap.appendChild(createdEl);
@@ -4752,8 +4801,36 @@ function buildMemoItemCard(key, idx, refreshFn) {
   cancelEditBtn.textContent = '취소';
   cancelEditBtn.style.display = 'none';
   let editing = null;
-  function startEdit() {
+  // 팝업 아래 "닫기" 왼쪽에 놓는 저장 버튼 (수정 중일 때만)
+  function restoreModalFooter() {
+    const modal = div.closest('.modal') || document.querySelector('.modal-edit-footer')?.closest('.modal');
+    document.querySelectorAll('.modal-edit-footer').forEach((f) => {
+      const close = f.querySelector('.close-btn');
+      if (close) f.parentNode.insertBefore(close, f);
+      f.remove();
+    });
+    return modal;
+  }
+  function showModalFooterSave() {
+    const modal = restoreModalFooter();
+    const close = modal && modal.querySelector(':scope > .close-btn');
+    if (!close) return false;
+    const footer = document.createElement('div');
+    footer.className = 'modal-edit-footer';
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'modal-save-btn';
+    save.textContent = '저장';
+    save.addEventListener('click', () => { if (editing) editBtn.click(); else restoreModalFooter(); });
+    close.parentNode.insertBefore(footer, close);
+    footer.appendChild(save);
+    footer.appendChild(close);
+    close.addEventListener('click', restoreModalFooter, { once: true });
+    return true;
+  }
+  function startEdit(focusWhich) {
     closeInlineExtras();
+    div.classList.add('is-editing');
     let titleEl = textWrap.querySelector('.memo-item-title');
     const createdTitle = !titleEl;
     if (createdTitle) {
@@ -4761,7 +4838,7 @@ function buildMemoItemCard(key, idx, refreshFn) {
       titleEl.className = 'memo-item-title';
       textWrap.insertBefore(titleEl, textWrap.firstChild);
     }
-    const bodyEl = textWrap.querySelector('.memo-item-todo-row span, :scope > span');
+    const bodyEl = textWrap.querySelector('.memo-item-body');
     const origTitle = titleEl.textContent;
     const origBody = bodyEl.textContent;
     const mode = ('plaintextOnly' in document.createElement('div')) ? 'plaintext-only' : 'true';
@@ -4796,12 +4873,15 @@ function buildMemoItemCard(key, idx, refreshFn) {
     });
     div.insertBefore(emojiRow, textWrap.nextSibling);
     editing = { titleEl, bodyEl, createdTitle, origTitle, origBody, stop, emojiRow };
-    bodyEl.focus();
-    const r = document.createRange(); r.selectNodeContents(bodyEl); r.collapse(false);
+    const focusEl = focusWhich === 'title' ? titleEl : bodyEl;
+    focusEl.focus();
+    const r = document.createRange(); r.selectNodeContents(focusEl); r.collapse(false);
     const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
     editBtn.textContent = '저장';
     editBtn.classList.add('btn-inline-save');
     cancelEditBtn.style.display = '';
+    // 저장은 팝업 아래 "닫기" 왼쪽에 (그럴 수 없는 화면이면 위쪽 버튼 줄에 저장 버튼을 보여줌)
+    if (!showModalFooterSave()) { editBtn.style.display = ''; actions.insertBefore(editBtn, cancelEditBtn); }
   }
   function endEdit(restore) {
     if (!editing) return;
@@ -4815,9 +4895,12 @@ function buildMemoItemCard(key, idx, refreshFn) {
       if (createdTitle) titleEl.remove();
     }
     editing = null;
+    div.classList.remove('is-editing');
     editBtn.textContent = '수정';
     editBtn.classList.remove('btn-inline-save');
+    editBtn.remove();
     cancelEditBtn.style.display = 'none';
+    restoreModalFooter();
   }
   editBtn.addEventListener('click', () => {
     if (!editing) { startEdit(); return; }
@@ -4825,6 +4908,7 @@ function buildMemoItemCard(key, idx, refreshFn) {
     const newText = editing.bodyEl.innerText.replace(/\n+$/g, '');
     // 제목만 있는 일정(내용 없이 제목+알람만 등록한 경우 등)도 고칠 수 있게: 제목이나 내용 중 하나만 있으면 됨
     if (!newText.trim() && !newTitle.trim()) { alert('제목이나 내용 중 하나는 입력해주세요.'); return; }
+    restoreModalFooter();
     // 반복 일정이면 모든 회차를 같이 고칠지 물어봄 (기본은 전체)
     const allRepeats = item.repeatId
       ? confirm('반복 일정이에요. 모든 회차를 같이 수정할까요?\n확인: 반복 전체 수정 / 취소: 이 날짜만 수정')
@@ -4833,7 +4917,7 @@ function buildMemoItemCard(key, idx, refreshFn) {
     applyMemoContent(key, idx, newText, allRepeats);
   });
   cancelEditBtn.addEventListener('click', () => endEdit(true));
-  actions.appendChild(editBtn);
+  // "수정" 버튼은 없애고 제목·내용 옆 ✏️로 수정 시작 (editBtn은 저장 동작용으로만 씀)
   actions.appendChild(cancelEditBtn);
 
   const convertBtn = document.createElement('button');
@@ -5009,7 +5093,8 @@ function buildMemoItemCard(key, idx, refreshFn) {
   }
 
   const delOneBtn = document.createElement('button');
-  delOneBtn.textContent = (item.groupId || item.repeatId) ? '이날만' : '삭제';
+  delOneBtn.textContent = (item.groupId || item.repeatId) ? '🗑 이날만 삭제' : '🗑 삭제';
+  delOneBtn.className = 'btn-del-one';
   delOneBtn.addEventListener('click', () => {
     memos[key].splice(idx, 1);
     if (memos[key].length === 0) delete memos[key];
