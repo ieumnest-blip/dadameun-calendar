@@ -622,21 +622,21 @@
     border-color: #fff;
   }
   /* 일정 있는 날짜 표시 방법 (⭕ 버튼으로 고름): 동그라미(기본) / 점 / 밑줄 / 색칠 / 표시 안 함 */
-  body.mark-dot td.has-memo:not(.today) .day-num::after, .mark-preview--dot .day-num::after {
+  body.mark-dot td.has-memo:not(.today):not([data-mark]) .day-num::after, td.has-memo[data-mark="dot"]:not(.today) .day-num::after, .mark-preview--dot .day-num::after {
     top: 0; right: -8px; bottom: auto; left: auto; /* 숫자 오른쪽 위 (아래 일정 칸에 가리지 않게) */
     width: 7px; height: 7px;
     border: none; border-radius: 50%;
     background: var(--memo-color, #3fa0d8);
     transform: none;
   }
-  body.mark-underline td.has-memo:not(.today) .day-num::after, .mark-preview--underline .day-num::after {
+  body.mark-underline td.has-memo:not(.today):not([data-mark]) .day-num::after, td.has-memo[data-mark="underline"]:not(.today) .day-num::after, .mark-preview--underline .day-num::after {
     top: auto; bottom: 1px; left: 1px; right: 1px;
     border: none; border-bottom: 3px solid var(--memo-color, #3fa0d8);
     border-radius: 2px;
     transform: rotate(-3deg);
   }
-  body.mark-fill td.has-memo:not(.today) .day-num, .mark-preview--fill .day-num { isolation: isolate; }
-  body.mark-fill td.has-memo:not(.today) .day-num::after, .mark-preview--fill .day-num::after {
+  body.mark-fill td.has-memo:not(.today):not([data-mark]) .day-num, td.has-memo[data-mark="fill"]:not(.today) .day-num, .mark-preview--fill .day-num { isolation: isolate; }
+  body.mark-fill td.has-memo:not(.today):not([data-mark]) .day-num::after, td.has-memo[data-mark="fill"]:not(.today) .day-num::after, .mark-preview--fill .day-num::after {
     border: none;
     background: var(--memo-color, #3fa0d8);
     opacity: 0.22;
@@ -644,7 +644,7 @@
     transform: none;
     z-index: -1;
   }
-  body.mark-none td.has-memo:not(.today) .day-num::after, .mark-preview--none .day-num::after { display: none; }
+  body.mark-none td.has-memo:not(.today):not([data-mark]) .day-num::after, td.has-memo[data-mark="none"]:not(.today) .day-num::after, .mark-preview--none .day-num::after { display: none; }
   .mark-style-picker {
     position: fixed;
     z-index: 2100;
@@ -667,6 +667,12 @@
   .mark-style-picker button.active { background: #e4f1fa; font-weight: 700; }
   .mark-preview { position: relative; display: inline-block; width: 34px; text-align: center; font-size: 16px; }
   .mark-preview .day-num { --memo-color: #3fa0d8; }
+  /* 일정 창의 "날짜 표시" 줄 - 이 일정이 있는 날만 표시 방법을 따로 */
+  .item-mark-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px; color: #4a7996; }
+  .item-mark-row .item-mark-label { margin-right: 2px; font-weight: 700; }
+  .memo-item .item-mark-row button { background: #f1f6fa; padding: 3px 6px; display: inline-flex; align-items: center; gap: 2px; }
+  .memo-item .item-mark-row button.active { background: #3d8fc0; color: #fff; }
+
   :where(.mark-preview) .day-num::after { /* 미리보기 기본 = 동그라미 (점·밑줄 등 위 규칙이 덮어씀) */
     content: '';
     position: absolute;
@@ -3666,7 +3672,11 @@ function buildMonthBlock(year, month) {
         const holidayName = HOLIDAYS[k];
         if (normalItems.length > 0) {
           td.classList.add('has-memo');
-          if (normalItems[0].bgColor) td.style.setProperty('--memo-color', normalItems[0].bgColor);
+          // 일정마다 따로 고른 표시 방법이 있으면 그 칸은 그걸로 (여러 개면 위쪽 일정 것), 없으면 ⭕ 전체 설정
+          const marked = normalItems.find((it) => it.markStyle);
+          if (marked) td.dataset.mark = marked.markStyle;
+          const colorSrc = marked || normalItems[0];
+          if (colorSrc.bgColor) td.style.setProperty('--memo-color', colorSrc.bgColor);
         }
         if (holidayName) td.classList.add('holiday');
         if (isThisMonth && today.getDate() === day) td.classList.add('today');
@@ -4427,6 +4437,19 @@ let suppressModalHistoryClose = false; // 팝업을 다른 팝업으로 '교체'
 let openColorPickerState = null; // { key, idx, field } - 색상 팔레트를 펼쳐둔 상태로 재렌더링해도 유지하기 위함
 const COLOR_PRESETS = ['', '#ffd23c', '#f4a83a', '#e06565', '#c2255c', '#5fbf7a', '#7a8b3f', '#a8d94f', '#4fd1c5', '#22c1c3', '#6ec3e8', '#3d8fc0', '#3b5bdb', '#5b4fc7', '#a880e0', '#b8a9e3', '#e07fb8', '#ff8c69', '#a67c52', '#8a95a0', '#4a4a4a', '#b5a642'];
 const EMOJI_PRESETS = ['⭐', '❗', '✅', '🎉', '📌', '🔥', '💡', '⚡', '📞', '🩷', '🤍', '🩵', '🤩', '💎', '🎯'];
+
+function setMemoMarkStyle(key, idx, style) {
+  const item = memos[key][idx];
+  const apply = (it) => { if (style) it.markStyle = style; else delete it.markStyle; };
+  if (item.repeatId && confirm('반복 일정이에요. 모든 회차의 날짜 표시를 같이 바꿀까요?\n확인: 반복 전체 / 취소: 이 날짜만')) {
+    Object.keys(memos).forEach((k) => memos[k].forEach((it) => { if (it.repeatId === item.repeatId) apply(it); }));
+  } else {
+    apply(item);
+  }
+  saveMemos();
+  renderCalendar();
+  refreshMemoPopup(key, idx);
+}
 
 function changeMemoColor(key, idx, field, color, allRepeats) {
   const item = memos[key][idx];
@@ -5237,6 +5260,26 @@ function buildMemoItemCard(key, idx, refreshFn) {
   }
 
   div.appendChild(actions);
+  // 날짜 표시 방법을 이 일정만 따로 고르기 (기간 일정은 달력 숫자 표시와 상관없어서 제외)
+  if (!item.groupId) {
+    const markRow = document.createElement('div');
+    markRow.className = 'item-mark-row';
+    const lab = document.createElement('span');
+    lab.className = 'item-mark-label';
+    lab.textContent = '날짜 표시';
+    markRow.appendChild(lab);
+    const MARK_ICONS = { '': '전체 설정', circle: '⭕ 동그라미', dot: '• 점', underline: '＿ 밑줄', fill: '◐ 색칠', none: '✕ 없음' };
+    [['', '전체 설정'], ...MARK_STYLES].forEach(([k, label]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.title = k ? label : '⭕ 버튼에서 고른 전체 설정을 따름';
+      if ((item.markStyle || '') === k) b.classList.add('active');
+      b.textContent = MARK_ICONS[k];
+      b.addEventListener('click', () => setMemoMarkStyle(key, idx, k));
+      markRow.appendChild(b);
+    });
+    div.appendChild(markRow);
+  }
   div.appendChild(delRow);
   return div;
 }
