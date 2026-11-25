@@ -1114,6 +1114,17 @@
     gap: 8px;
     margin-top: 18px;
   }
+  /* 일정 추가 창: 스크롤 없이 한 화면에 다 보이도록 이모지·사진칸을 촘촘하게, PC에서는 화면 높이까지 늘어남 */
+  #quickAddModal .emoji-row { gap: 4px; }
+  #quickAddModal .emoji-btn { min-width: 0; min-height: 0; flex: 1 0 calc(12.5% - 4px); padding: 3px 0; font-size: 15px; line-height: 1.3; }
+  #quickAddModal .image-drop-zone { display: flex; align-items: center; gap: 8px; padding: 6px 8px; text-align: left; font-size: 11.5px; }
+  #quickAddModal .image-drop-zone-label { flex: 1 1 auto; }
+  #quickAddModal .image-drop-zone.has-image { display: block; text-align: center; }
+  #quickAddModal .image-drop-zone-actions { margin: 0; flex-shrink: 0; }
+  #quickAddModal.modal { max-height: 88vh; }
+  @media (min-width: 1100px) {
+    #quickAddModal.modal { max-height: calc(100vh - 32px); }
+  }
   #quickAddModal .quickadd-btn-row .close-btn {
     display: block;
     flex: 1;
