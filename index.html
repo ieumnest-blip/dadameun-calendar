@@ -1924,6 +1924,15 @@
   /* ===== Check 체크리스트 ===== */
   .check-list { display: flex; flex-direction: column; gap: 2px; }
   .ck-row { display: flex; align-items: flex-start; gap: 6px; padding: 2px 0; }
+  .ck-grip {
+    flex: 0 0 12px; width: 12px; margin-top: 3px;
+    font-size: 13px; line-height: 1.4; color: #8fa9bb;
+    cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+  }
+  .ck-grip:hover { color: #3d8fc0; }
+  .ck-row.ck-dragging { opacity: 0.45; }
+  .ck-row.ck-drop-before { box-shadow: inset 0 2px 0 #3d8fc0; }
+  .ck-row.ck-drop-after { box-shadow: inset 0 -2px 0 #3d8fc0; }
   .ck-row input[type=checkbox] { width: 18px; height: 18px; margin: 4px 0 0; flex-shrink: 0; accent-color: #3d8fc0; cursor: pointer; }
   .ck-row.ck-blank input[type=checkbox] { opacity: .35; pointer-events: none; }
   .ck-text {
@@ -1934,10 +1943,10 @@
   .ck-text::placeholder { color: #9fb8c4; }
   .ck-btn { border: none; background: transparent; cursor: pointer; font-size: 14px; padding: 2px 3px; flex-shrink: 0; opacity: .55; line-height: 1.5; }
   .ck-btn:hover, .ck-btn.on { opacity: 1; }
-  .ck-alarm-line { display: flex; align-items: center; gap: 6px; padding: 0 0 4px 24px; font-size: 12px; color: #4a7996; flex-wrap: wrap; }
+  .ck-alarm-line { display: flex; align-items: center; gap: 6px; padding: 0 0 4px 42px; font-size: 12px; color: #4a7996; flex-wrap: wrap; }
   .ck-alarm-line input[type=datetime-local] { font-size: 12px; padding: 2px 4px; border: 1px solid #cfdbe3; border-radius: 6px; color: #33505f; }
   .ck-alarm-line button { font-size: 11px; border: 1px solid #cfdbe3; background: #fff; border-radius: 6px; padding: 2px 7px; cursor: pointer; color: #33505f; }
-  .ck-alarm-tag { font-size: 11px; color: #3d8fc0; padding-left: 24px; }
+  .ck-alarm-tag { font-size: 11px; color: #3d8fc0; padding-left: 42px; }
   .ck-alarm-tag.fired { color: #9fb8c4; }
   .memo-color-popup {
     position: fixed; z-index: 9999; display: none;
@@ -3135,11 +3144,56 @@ const checkListStore = (function () {
     return m ? `${+m[2]}/${+m[3]} ${m[4]}:${m[5]}` : '';
   }
   function autoGrow(ta) { ta.style.height = '0px'; ta.style.height = Math.max(24, ta.scrollHeight) + 'px'; }
+  function startCkDrag(e, fromIdx, rowEl, grip) {
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    const b = box();
+    const rows = Array.from(b.querySelectorAll('.ck-row:not(.ck-blank)'));
+    let insertAt = fromIdx;
+    rowEl.classList.add('ck-dragging');
+    grip.setPointerCapture(e.pointerId);
+    const clearMarks = () => rows.forEach((r) => r.classList.remove('ck-drop-before', 'ck-drop-after'));
+    function onMove(ev) {
+      // 칸 위/아래 끝 근처로 끌면 목록이 저절로 스크롤
+      const br = b.getBoundingClientRect();
+      if (ev.clientY < br.top + 24) b.scrollTop -= 10;
+      else if (ev.clientY > br.bottom - 24) b.scrollTop += 10;
+      insertAt = rows.filter((r) => { const rr = r.getBoundingClientRect(); return rr.top + rr.height / 2 < ev.clientY; }).length;
+      clearMarks();
+      if (insertAt < rows.length) rows[insertAt].classList.add('ck-drop-before');
+      else rows[rows.length - 1].classList.add('ck-drop-after');
+    }
+    function onUp() {
+      grip.removeEventListener('pointermove', onMove);
+      grip.removeEventListener('pointerup', onUp);
+      grip.removeEventListener('pointercancel', onUp);
+      clearMarks();
+      rowEl.classList.remove('ck-dragging');
+      const to = insertAt > fromIdx ? insertAt - 1 : insertAt;
+      if (to === fromIdx) return;
+      const [moved] = items.splice(fromIdx, 1);
+      items.splice(to, 0, moved);
+      save();
+      render();
+    }
+    grip.addEventListener('pointermove', onMove);
+    grip.addEventListener('pointerup', onUp);
+    grip.addEventListener('pointercancel', onUp);
+  }
   function makeRow(it, idx) {
     const frag = document.createDocumentFragment();
     const blank = !it;
     const row = document.createElement('div');
     row.className = 'ck-row' + (blank ? ' ck-blank' : '') + (it && it.done ? ' done' : '');
+    // 왼쪽 ⠿ 손잡이를 위아래로 끌어서 순서 바꾸기
+    const grip = document.createElement('span');
+    grip.className = 'ck-grip';
+    if (!blank) {
+      grip.textContent = '⠿';
+      grip.title = '위아래로 끌어서 순서 바꾸기';
+      grip.addEventListener('pointerdown', (e) => startCkDrag(e, idx, row, grip));
+    }
+    row.appendChild(grip);
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.checked = !!(it && it.done);
