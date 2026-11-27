@@ -1922,6 +1922,23 @@
     flex-direction: column;
     min-height: 140px;
   }
+  /* 모바일: Check·메모 칸 접기 (제목 줄 오른쪽 ▾ 또는 제목 줄 빈 곳을 누르면 접고 펼침, 처음엔 접혀 있음) */
+  .memo-collapse-btn { display: none; }
+  @media (max-width: 1099px) {
+    .memo-freebox-wrap .memo-freebox-title { cursor: pointer; }
+    .memo-collapse-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      margin-left: auto; margin-right: 26px; /* 오른쪽 위 ⠿ 손잡이와 안 겹치게 */
+      width: 26px; height: 22px; padding: 0;
+      border: none; border-radius: 6px; background: #eef4f8; color: #4a7996;
+      font-size: 12px; cursor: pointer;
+      transition: transform 0.15s;
+    }
+    .memo-freebox-wrap.collapsed .memo-collapse-btn { transform: rotate(-90deg); }
+    .memo-freebox-wrap.collapsed { min-height: 0; height: auto !important; padding-bottom: 6px; }
+    .memo-freebox-wrap.collapsed .memo-freebox-title { margin-bottom: 0; }
+    .memo-freebox-wrap.collapsed > :not(.memo-freebox-title):not(.block-move-handle) { display: none !important; }
+  }
   /* 메모 칸 제목·아이콘 바꾸기 (제목 글자를 누르면 바로 고치고, 아이콘을 누르면 고르는 창) */
   .memo-title-icon {
     font: inherit;
@@ -6531,6 +6548,39 @@ document.querySelectorAll('.block-move-handle').forEach((handle) => {
   });
 });
 applyBlockLayout();
+
+/* 모바일에서 Check·메모 칸 접기. 처음(저장된 게 없으면)엔 접혀 있고, 펼친 상태는 이 기기에 기억 */
+(function setupMemoCollapse() {
+  const KEY = 'dadameunMemoCollapse';
+  let state = {};
+  try { state = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { state = {}; }
+  ['checkMemoWrap', 'installMemoWrap', 'freeMemoWrap', 'quoteMemoWrap'].forEach((id) => {
+    const wrap = document.getElementById(id);
+    const title = wrap && wrap.querySelector('.memo-freebox-title');
+    if (!title) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'memo-collapse-btn';
+    btn.textContent = '▾';
+    btn.title = '접기 / 펼치기';
+    title.appendChild(btn);
+    const apply = () => wrap.classList.toggle('collapsed', state[id] !== false);
+    const toggle = () => {
+      // state[id] === false 이면 펼친 상태, 값이 없으면 접힌 상태(기본)
+      if (wrap.classList.contains('collapsed')) state[id] = false; else delete state[id];
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* 무시 */ }
+      apply();
+    };
+    btn.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
+    // 제목 줄의 빈 곳을 눌러도 접고 펼침 (아이콘·제목 글자는 원래처럼 바꾸기 기능)
+    title.addEventListener('click', (e) => {
+      if (!window.matchMedia('(max-width: 1099px)').matches) return;
+      if (e.target.closest('.memo-title-icon, .memo-title-text, .block-move-handle')) return;
+      toggle();
+    });
+    apply();
+  });
+})();
 
 const BLOCK_HEIGHT_KEY = 'dadameunBlockHeights';
 function loadBlockHeights() {
