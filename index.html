@@ -2448,7 +2448,7 @@
       <button class="lock-btn" id="searchBtn" title="검색">🔍</button>
       <button class="lock-btn" id="manageBtn" title="등록된 내용 한눈에 보기 · 일괄 삭제">📋</button>
       <button class="lock-btn" id="markStyleBtn" title="일정 있는 날짜 표시 방법 고르기">⭕</button>
-      <button class="lock-btn" id="excelImportBtn" title="엑셀(입고일정)로 일정 넣기">📥</button>
+      <button class="lock-btn" id="excelImportBtn" title="입고일정 붙여넣기 / 엑셀로 일정 넣기">📥</button>
       <input type="file" id="excelImportInput" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display:none;">
       <button class="view-toggle" id="toggleView">전체보기</button>
       <button class="lock-btn" id="lockBtn" title="로그아웃">🚪 로그아웃</button>
@@ -7145,6 +7145,10 @@ function findImported(importKey) {
 function openExcelImportPreview(XLSX, wb) {
   const sheets = wb.SheetNames.map((n) => ({ name: n, entries: parseIncomingSheet(XLSX, wb.Sheets[n]) })).filter((sh) => sh.entries.length);
   if (!sheets.length) { alert('이 엑셀에서 입고일정을 찾지 못했어요.\n("계약자"와 "입고일정" 칸이 있는 시트를 읽어요)'); return; }
+  openImportPreview(sheets, '가장 최근 조정 날짜로 넣어요. (미정)인 현장은 빠져요. 이미 넣었던 현장은 날짜가 바뀐 것만 옮겨요.');
+}
+/* 넣을 일정 미리보기 (엑셀 파일 / 붙여넣기 공통). sheets: [{name, entries:[{name, kind, date}]}] */
+function openImportPreview(sheets, noteText) {
   // 기본: 인버터까지 있는 시트 중 맨 뒤(보통 가장 최근) 시트
   let cur = sheets.length - 1;
   for (let i = sheets.length - 1; i >= 0; i--) { if (sheets[i].entries.some((e) => e.kind === '인버터')) { cur = i; break; } }
@@ -7155,7 +7159,7 @@ function openExcelImportPreview(XLSX, wb) {
   bg.appendChild(box);
   const h = document.createElement('h3');
   // 지금 보고 있는 계정에만 들어가므로, 어느 계정인지 제목에 크게 보여줌
-  h.textContent = '📥 엑셀 입고일정 넣기 → ' + ({ '1': '💤 졸린곰', '2': '💭 고민곰' }[currentAccount] || '') + ' 달력';
+  h.textContent = '📥 입고일정 넣기 → ' + ({ '1': '💤 졸린곰', '2': '💭 고민곰' }[currentAccount] || '') + ' 달력';
   box.appendChild(h);
   const sheetRow = document.createElement('label');
   sheetRow.className = 'xl-import-sheet';
@@ -7164,10 +7168,10 @@ function openExcelImportPreview(XLSX, wb) {
   sheets.forEach((sh, i) => { const o = document.createElement('option'); o.value = i; o.textContent = sh.name; sel.appendChild(o); });
   sel.value = cur;
   sheetRow.appendChild(sel);
-  box.appendChild(sheetRow);
+  if (sheets.length > 1) box.appendChild(sheetRow); // 붙여넣기처럼 하나뿐이면 시트 고르기는 안 보임
   const note = document.createElement('div');
   note.className = 'xl-import-note';
-  note.textContent = '가장 최근 조정 날짜로 넣어요. (미정)인 현장은 빠져요. 이미 넣었던 현장은 날짜가 바뀐 것만 옮겨요.';
+  note.textContent = noteText;
   box.appendChild(note);
   const list = document.createElement('div');
   list.className = 'xl-import-list';
@@ -7251,11 +7255,85 @@ function openExcelImportPreview(XLSX, wb) {
   document.body.appendChild(bg);
   draw();
 }
-document.getElementById('excelImportBtn').addEventListener('click', () => {
-  const input = document.getElementById('excelImportInput');
-  input.value = '';
-  input.click();
-});
+/* 붙여넣기: 엑셀에서 "현장 이름 | 날짜" 두 칸을 복사해서 붙여넣으면 줄마다 읽음.
+   날짜가 아닌 줄((미정) 등)과 빈 줄은 건너뜀 */
+function parsePastedIncoming(text, kind) {
+  const entries = [];
+  let skipped = 0;
+  text.split(/\r?\n/).forEach((line) => {
+    const cells = (line.includes('\t') ? line.split('\t') : line.split(/\s{2,}/)).map((c) => c.trim()).filter(Boolean);
+    if (!cells.length) return;
+    const name = cells[0];
+    const raw = cells[cells.length - 1];
+    let date = cells.length > 1 ? xlCellDate(raw) : null;
+    if (!date && cells.length > 1) {
+      const m = /^(\d{2})[.\-/](\d{1,2})[.\-/](\d{1,2})$/.exec(raw); // 27.1.15 처럼 연도 두 자리
+      if (m) date = keyOf(2000 + +m[1], +m[2] - 1, +m[3]);
+    }
+    if (date) entries.push({ name, kind, date }); else skipped++;
+  });
+  return { entries, skipped };
+}
+function openPasteImport() {
+  const bg = document.createElement('div');
+  bg.className = 'xl-import-bg';
+  const box = document.createElement('div');
+  box.className = 'xl-import';
+  bg.appendChild(box);
+  const h = document.createElement('h3');
+  h.textContent = '📥 입고일정 붙여넣기 → ' + ({ '1': '💤 졸린곰', '2': '💭 고민곰' }[currentAccount] || '') + ' 달력';
+  box.appendChild(h);
+  const note = document.createElement('div');
+  note.className = 'xl-import-note';
+  note.textContent = '엑셀에서 "현장 이름"과 "입고일정" 두 칸을 같이 복사해서 아래에 붙여넣으세요. 날짜가 없는 줄((미정) 등)은 빠져요.';
+  box.appendChild(note);
+  const kindRow = document.createElement('div');
+  kindRow.className = 'xl-import-sheet';
+  kindRow.append('무엇의 입고?');
+  ['모듈', '인버터'].forEach((k, i) => {
+    const lab = document.createElement('label');
+    lab.style.cssText = 'display:inline-flex;align-items:center;gap:3px;margin-left:8px;';
+    const r = document.createElement('input');
+    r.type = 'radio'; r.name = 'pasteKind'; r.value = k; r.checked = i === 0;
+    lab.append(r, k);
+    kindRow.appendChild(lab);
+  });
+  box.appendChild(kindRow);
+  const ta = document.createElement('textarea');
+  ta.placeholder = '예)\n디와이오토㈜\t2027-01-15\n코스맥스엔비티㈜_B동\t2026-12-12';
+  ta.style.cssText = 'width:100%;box-sizing:border-box;min-height:220px;font-family:inherit;font-size:13.5px;padding:8px 10px;border:1px solid #c7d6de;border-radius:10px;resize:vertical;';
+  box.appendChild(ta);
+  const btns = document.createElement('div');
+  btns.className = 'xl-import-btns';
+  const fileBtn = document.createElement('button');
+  fileBtn.type = 'button'; fileBtn.className = 'xl-cancel'; fileBtn.textContent = '엑셀 파일';
+  fileBtn.title = '엑셀 파일을 통째로 골라서 넣기';
+  fileBtn.style.cssText = 'background:#dbe4ea;color:#33546b;';
+  const cancel = document.createElement('button');
+  cancel.type = 'button'; cancel.className = 'xl-cancel'; cancel.textContent = '취소';
+  const ok = document.createElement('button');
+  ok.type = 'button'; ok.className = 'xl-ok'; ok.textContent = '미리보기';
+  btns.append(fileBtn, cancel, ok);
+  box.appendChild(btns);
+  cancel.addEventListener('click', () => bg.remove());
+  bg.addEventListener('click', (e) => { if (e.target === bg) bg.remove(); });
+  fileBtn.addEventListener('click', () => {
+    bg.remove();
+    const input = document.getElementById('excelImportInput');
+    input.value = '';
+    input.click();
+  });
+  ok.addEventListener('click', () => {
+    const kind = box.querySelector('input[name="pasteKind"]:checked').value;
+    const { entries, skipped } = parsePastedIncoming(ta.value, kind);
+    if (!entries.length) { alert('날짜가 있는 줄을 찾지 못했어요.\n현장 이름과 날짜 두 칸을 같이 복사해서 붙여넣어 주세요.'); return; }
+    bg.remove();
+    openImportPreview([{ name: '붙여넣기', entries }], kind + ' 입고로 넣어요.' + (skipped ? ' 날짜가 없는 ' + skipped + '줄은 빠졌어요.' : '') + ' 이미 넣었던 현장은 날짜가 바뀐 것만 옮겨요.');
+  });
+  document.body.appendChild(bg);
+  ta.focus();
+}
+document.getElementById('excelImportBtn').addEventListener('click', openPasteImport);
 document.getElementById('excelImportInput').addEventListener('change', async (e) => {
   const file = e.target.files && e.target.files[0];
   if (!file) return;
