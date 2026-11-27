@@ -653,6 +653,41 @@
   }
   .mark-style-picker .mark-icon-grid button.active, .memo-item .mark-icon-grid button.active { background: #e4f1fa; }
   body.mark-none td.has-memo:not(.today):not([data-mark]) .day-num::after, td.has-memo[data-mark="none"]:not(.today) .day-num::after, .mark-preview--none .day-num::after { display: none; }
+  /* ===== 엑셀 입고일정 넣기 미리보기 ===== */
+  .xl-import-bg {
+    position: fixed; inset: 0; z-index: 2200;
+    background: rgba(51,80,95,0.25);
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .xl-import {
+    background: #f5f8fa; border-radius: 16px; border: 2px solid #3d8fc0;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.22);
+    width: 100%; max-width: 560px; max-height: 92vh;
+    display: flex; flex-direction: column;
+    padding: 14px 16px; box-sizing: border-box;
+  }
+  .xl-import h3 { margin: 0 0 8px; color: #1f7bb5; font-size: 17px; }
+  .xl-import-sheet { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #33505f; margin-bottom: 6px; }
+  .xl-import-sheet select { flex: 1 1 auto; min-width: 0; font-family: inherit; font-size: 13px; padding: 5px 6px; border: 1px solid #c7d6de; border-radius: 8px; }
+  .xl-import-note { font-size: 12px; color: #6a8494; margin-bottom: 6px; }
+  .xl-import-list { flex: 1 1 auto; overflow-y: auto; background: #fff; border: 1px solid #dbe4ea; border-radius: 10px; }
+  .xl-import-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid #eef2f5; font-size: 13.5px; color: #33505f; }
+  .xl-import-row:last-child { border-bottom: none; }
+  .xl-import-row input { width: 16px; height: 16px; accent-color: #3d8fc0; flex-shrink: 0; }
+  .xl-import-date { flex: 0 0 74px; font-weight: 700; color: #1f7bb5; }
+  .xl-import-name { flex: 1 1 auto; min-width: 0; }
+  .xl-import-kind { flex-shrink: 0; font-size: 11.5px; padding: 1px 6px; border-radius: 6px; background: #e4f1fa; color: #2f6f99; }
+  .xl-import-kind.inv { background: #fff0d6; color: #b5651d; }
+  .xl-import-status { flex: 0 0 auto; font-size: 11.5px; color: #8aa3b3; text-align: right; }
+  .xl-import-status.new { color: #2f9e44; font-weight: 700; }
+  .xl-import-status.move { color: #e0661c; font-weight: 700; }
+  .xl-import-row.same { opacity: 0.55; }
+  .xl-import-btns { display: flex; gap: 8px; margin-top: 10px; }
+  .xl-import-btns button { font-family: inherit; border: none; border-radius: 10px; padding: 9px 0; font-size: 15px; cursor: pointer; }
+  .xl-import-btns .xl-cancel { flex: 1; background: #33505f; color: #fff; }
+  .xl-import-btns .xl-ok { flex: 3; background: #3d8fc0; color: #fff; font-weight: 700; }
+  .xl-import-btns .xl-ok:disabled { background: #a9c6d8; cursor: default; }
   .mark-style-picker {
     position: fixed;
     z-index: 2100;
@@ -2413,6 +2448,8 @@
       <button class="lock-btn" id="searchBtn" title="검색">🔍</button>
       <button class="lock-btn" id="manageBtn" title="등록된 내용 한눈에 보기 · 일괄 삭제">📋</button>
       <button class="lock-btn" id="markStyleBtn" title="일정 있는 날짜 표시 방법 고르기">⭕</button>
+      <button class="lock-btn" id="excelImportBtn" title="엑셀(입고일정)로 일정 넣기">📥</button>
+      <input type="file" id="excelImportInput" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display:none;">
       <button class="view-toggle" id="toggleView">전체보기</button>
       <button class="lock-btn" id="lockBtn" title="로그아웃">🚪 로그아웃</button>
     </div>
@@ -7036,6 +7073,201 @@ document.getElementById('markStyleBtn').addEventListener('click', () => {
   setTimeout(() => document.addEventListener('pointerdown', onMarkPickerOutside, true), 0);
 });
 applyMarkStyle();
+
+/* ===== 엑셀(입고일정 현황표)을 올려서 입고 일정을 달력에 넣기 (📥 버튼) =====
+   - 시트에서 "계약자" 칸이 있는 줄을 제목 줄로 보고, "입고일정"이 들어간 칸들을 찾음
+   - "인버터" 칸 왼쪽의 입고일정은 모듈, 오른쪽은 인버터 입고일정
+   - 한 현장의 입고일정 칸이 여러 개면 가장 오른쪽(최근 조정)부터 보고 날짜가 있는 첫 칸을 씀. (미정)이면 건너뜀
+   - 엑셀로 넣은 일정은 importKey로 기억해서, 새 버전을 다시 올리면 날짜가 바뀐 것만 새 날짜로 옮김 */
+let xlsxLibPromise = null;
+function loadXlsxLib() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (xlsxLibPromise) return xlsxLibPromise;
+  const urls = ['https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'];
+  xlsxLibPromise = new Promise((resolve, reject) => {
+    const tryAt = (i) => {
+      if (i >= urls.length) { xlsxLibPromise = null; reject(new Error('엑셀 읽기 도구를 불러오지 못했어요. 인터넷 연결을 확인해주세요.')); return; }
+      const sc = document.createElement('script');
+      sc.src = urls[i];
+      sc.onload = () => (window.XLSX ? resolve(window.XLSX) : tryAt(i + 1));
+      sc.onerror = () => { sc.remove(); tryAt(i + 1); };
+      document.head.appendChild(sc);
+    };
+    tryAt(0);
+  });
+  return xlsxLibPromise;
+}
+function xlCellDate(v) {
+  // 엑셀 날짜는 숫자(1900년부터 센 날수)로 읽어서 직접 바꿈 - 시간대 때문에 하루 밀리는 일이 없게
+  if (typeof v === 'number' && v > 30000 && v < 80000) {
+    const d = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 86400000);
+    return keyOf(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  }
+  if (typeof v === 'string') {
+    const m = /^\s*(\d{4})[.\-/]\s*(\d{1,2})[.\-/]\s*(\d{1,2})\s*$/.exec(v);
+    if (m) return keyOf(+m[1], +m[2] - 1, +m[3]);
+  }
+  return null;
+}
+/* 시트 하나에서 [{name, kind:'모듈'|'인버터', date}] 뽑기 */
+function parseIncomingSheet(XLSX, ws) {
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+  const headIdx = rows.findIndex((r) => r && r.some((c) => typeof c === 'string' && c.replace(/\s/g, '') === '계약자'));
+  if (headIdx === -1) return [];
+  const head = rows[headIdx].map((c) => (typeof c === 'string' ? c.replace(/\s/g, '') : ''));
+  const nameCol = head.indexOf('계약자');
+  const invCol = head.findIndex((h) => h.startsWith('인버터'));
+  const dateCols = head.map((h, i) => (h.includes('입고일정') ? i : -1)).filter((i) => i >= 0);
+  const groups = [['모듈', dateCols.filter((i) => invCol === -1 || i < invCol)]];
+  if (invCol !== -1) groups.push(['인버터', dateCols.filter((i) => i > invCol)]);
+  const out = [];
+  for (let r = headIdx + 1; r < rows.length; r++) {
+    const row = rows[r] || [];
+    const name = row[nameCol];
+    if (typeof name !== 'string' || !name.trim()) continue;
+    if (/합\s*계/.test(name) || /합\s*계/.test(String(row[0] || ''))) break;
+    groups.forEach(([kind, cols]) => {
+      for (let k = cols.length - 1; k >= 0; k--) {
+        const d = xlCellDate(row[cols[k]]);
+        if (d) { out.push({ name: name.trim(), kind, date: d }); break; }
+      }
+    });
+  }
+  return out;
+}
+function findImported(importKey) {
+  for (const k of Object.keys(memos)) {
+    const idx = memos[k].findIndex((it) => it.importKey === importKey);
+    if (idx !== -1) return { key: k, idx };
+  }
+  return null;
+}
+function openExcelImportPreview(XLSX, wb) {
+  const sheets = wb.SheetNames.map((n) => ({ name: n, entries: parseIncomingSheet(XLSX, wb.Sheets[n]) })).filter((sh) => sh.entries.length);
+  if (!sheets.length) { alert('이 엑셀에서 입고일정을 찾지 못했어요.\n("계약자"와 "입고일정" 칸이 있는 시트를 읽어요)'); return; }
+  // 기본: 인버터까지 있는 시트 중 맨 뒤(보통 가장 최근) 시트
+  let cur = sheets.length - 1;
+  for (let i = sheets.length - 1; i >= 0; i--) { if (sheets[i].entries.some((e) => e.kind === '인버터')) { cur = i; break; } }
+  const bg = document.createElement('div');
+  bg.className = 'xl-import-bg';
+  const box = document.createElement('div');
+  box.className = 'xl-import';
+  bg.appendChild(box);
+  const h = document.createElement('h3');
+  h.textContent = '📥 엑셀 입고일정 넣기';
+  box.appendChild(h);
+  const sheetRow = document.createElement('label');
+  sheetRow.className = 'xl-import-sheet';
+  sheetRow.textContent = '시트';
+  const sel = document.createElement('select');
+  sheets.forEach((sh, i) => { const o = document.createElement('option'); o.value = i; o.textContent = sh.name; sel.appendChild(o); });
+  sel.value = cur;
+  sheetRow.appendChild(sel);
+  box.appendChild(sheetRow);
+  const note = document.createElement('div');
+  note.className = 'xl-import-note';
+  note.textContent = '가장 최근 조정 날짜로 넣어요. (미정)인 현장은 빠져요. 이미 넣었던 현장은 날짜가 바뀐 것만 옮겨요.';
+  box.appendChild(note);
+  const list = document.createElement('div');
+  list.className = 'xl-import-list';
+  box.appendChild(list);
+  const btns = document.createElement('div');
+  btns.className = 'xl-import-btns';
+  const cancel = document.createElement('button');
+  cancel.type = 'button'; cancel.className = 'xl-cancel'; cancel.textContent = '취소';
+  const ok = document.createElement('button');
+  ok.type = 'button'; ok.className = 'xl-ok';
+  btns.appendChild(cancel); btns.appendChild(ok);
+  box.appendChild(btns);
+  let rowsState = [];
+  // 한 달보다 더 지난 날짜는 엑셀에 잘못 적혔을 가능성이 커서 경고하고 기본으로 빼 둠
+  const pastLimit = (() => { const t = new Date(); t.setDate(t.getDate() - 30); return keyOf(t.getFullYear(), t.getMonth(), t.getDate()); })();
+  function draw() {
+    list.innerHTML = '';
+    rowsState = sheets[cur].entries.slice().sort((a, b) => a.date.localeCompare(b.date)).map((e) => {
+      const importKey = 'xl|' + e.name + '|' + e.kind;
+      const found = findImported(importKey);
+      const status = !found ? 'new' : found.key === e.date ? 'same' : 'move';
+      const past = status !== 'same' && e.date < pastLimit;
+      return Object.assign({}, e, { importKey, found, status, past, checked: status !== 'same' && !past });
+    });
+    rowsState.forEach((st) => {
+      const row = document.createElement('label');
+      row.className = 'xl-import-row' + (st.status === 'same' ? ' same' : '');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = st.checked;
+      cb.disabled = st.status === 'same';
+      cb.addEventListener('change', () => { st.checked = cb.checked; updateOk(); });
+      const d = document.createElement('span');
+      d.className = 'xl-import-date';
+      d.textContent = st.date.slice(2).replace(/-/g, '.');
+      const n = document.createElement('span');
+      n.className = 'xl-import-name';
+      n.textContent = st.name;
+      const kd = document.createElement('span');
+      kd.className = 'xl-import-kind' + (st.kind === '인버터' ? ' inv' : '');
+      kd.textContent = st.kind;
+      const stt = document.createElement('span');
+      stt.className = 'xl-import-status ' + st.status;
+      stt.textContent = st.status === 'new' ? '새로' : st.status === 'move' ? st.found.key.slice(5).replace('-', '/') + '→이동' : '이미 있음';
+      if (st.past) { stt.textContent = '⚠ 지난 날짜(엑셀 확인)'; stt.className = 'xl-import-status move'; }
+      row.append(cb, d, n, kd, stt);
+      list.appendChild(row);
+    });
+    updateOk();
+  }
+  function updateOk() {
+    const n = rowsState.filter((st) => st.checked && st.status !== 'same').length;
+    ok.textContent = n ? n + '건 달력에 넣기' : '넣을 일정이 없어요';
+    ok.disabled = !n;
+  }
+  sel.addEventListener('change', () => { cur = Number(sel.value); draw(); });
+  cancel.addEventListener('click', () => bg.remove());
+  bg.addEventListener('click', (e) => { if (e.target === bg) bg.remove(); });
+  ok.addEventListener('click', () => {
+    let added = 0, moved = 0;
+    rowsState.filter((st) => st.checked && st.status !== 'same').forEach((st) => {
+      if (st.status === 'move') {
+        // 다른 내용(색·완료 등)은 그대로 두고 날짜만 옮김
+        const [it] = memos[st.found.key].splice(st.found.idx, 1);
+        if (!memos[st.found.key].length) delete memos[st.found.key];
+        it.alarmFired = false;
+        (memos[st.date] = memos[st.date] || []).push(it);
+        moved++;
+      } else {
+        (memos[st.date] = memos[st.date] || []).push({ text: '', title: '🚚 ' + st.name + ' ' + st.kind + ' 입고', groupId: null, start: null, end: null, color: null, bgColor: null, isTodo: false, done: false, alarmTime: null, alarmFired: false, isDday: false, ddayTarget: null, image: null, order: nextOrder(), createdAt: Date.now(), importKey: st.importKey });
+        added++;
+      }
+    });
+    saveMemos();
+    renderCalendar();
+    updateDdayWidget();
+    renderSelectedAgenda();
+    bg.remove();
+    alert('달력에 넣었어요.\n새로 넣음 ' + added + '건' + (moved ? ' · 날짜 옮김 ' + moved + '건' : ''));
+  });
+  document.body.appendChild(bg);
+  draw();
+}
+document.getElementById('excelImportBtn').addEventListener('click', () => {
+  const input = document.getElementById('excelImportInput');
+  input.value = '';
+  input.click();
+});
+document.getElementById('excelImportInput').addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  try {
+    const XLSX = await loadXlsxLib();
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    openExcelImportPreview(XLSX, wb);
+    e.target.value = ''; // 같은 파일을 다시 골라도 읽히게
+  } catch (err) {
+    alert('엑셀을 읽지 못했어요.\n' + (err && err.message ? err.message : err));
+  }
+});
 
 renderCalendar();
 scrollToMonth(curYear, curMonth, false);
