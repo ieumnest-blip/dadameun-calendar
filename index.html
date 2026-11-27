@@ -1783,7 +1783,7 @@
   .block-resize-grip {
     flex-shrink: 0;
     height: 12px;
-    margin: 4px -4px -6px;
+    margin: 4px 0 -6px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1922,8 +1922,9 @@
     flex-direction: column;
     min-height: 140px;
   }
-  /* 모바일: 일정 확인 칸과 달력 사이 빈 여백 줄이기 */
+  /* 모바일: 일정 확인 칸과 달력 사이 빈 여백 줄이기 + 화면 좌우 흔들림 방지 */
   @media (max-width: 1099px) {
+    html, body { overflow-x: clip; }
     .memo-panel { margin-bottom: 4px; }
     main { padding-top: 0; }
     #calendarWrap { padding-bottom: 4px; }
