@@ -7154,7 +7154,8 @@ function openExcelImportPreview(XLSX, wb) {
   box.className = 'xl-import';
   bg.appendChild(box);
   const h = document.createElement('h3');
-  h.textContent = '📥 엑셀 입고일정 넣기';
+  // 지금 보고 있는 계정에만 들어가므로, 어느 계정인지 제목에 크게 보여줌
+  h.textContent = '📥 엑셀 입고일정 넣기 → ' + ({ '1': '💤 졸린곰', '2': '💭 고민곰' }[currentAccount] || '') + ' 달력';
   box.appendChild(h);
   const sheetRow = document.createElement('label');
   sheetRow.className = 'xl-import-sheet';
