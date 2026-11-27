@@ -1922,6 +1922,12 @@
     flex-direction: column;
     min-height: 140px;
   }
+  /* 모바일: 일정 확인 칸과 달력 사이 빈 여백 줄이기 */
+  @media (max-width: 1099px) {
+    .memo-panel { margin-bottom: 4px; }
+    main { padding-top: 0; }
+    #calendarWrap { padding-bottom: 4px; }
+  }
   /* 모바일: Check·메모 칸 접기 (제목 줄 오른쪽 ▾ 또는 제목 줄 빈 곳을 누르면 접고 펼침, 처음엔 접혀 있음) */
   .memo-collapse-btn { display: none; }
   @media (max-width: 1099px) {
