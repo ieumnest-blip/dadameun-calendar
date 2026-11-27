@@ -3436,7 +3436,7 @@ function ensureMemoColorPopup() {
   const pop = document.createElement('div');
   pop.className = 'memo-color-popup';
   const keep = (e) => { e.preventDefault(); };
-  ['mousedown', 'pointerdown', 'touchstart'].forEach((ev) => pop.addEventListener(ev, keep, { passive: false }));
+  ['mousedown', 'pointerdown'].forEach((ev) => pop.addEventListener(ev, keep, { passive: false }));
   const mk = (cls, color, text) => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -5108,7 +5108,7 @@ function buildMemoItemCard(key, idx, refreshFn) {
       eb.className = 'emoji-btn';
       eb.textContent = emoji;
       // 버튼을 눌러도 글자 칸의 커서가 풀리지 않게
-      ['mousedown', 'pointerdown', 'touchstart'].forEach((ev) => eb.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
+      ['mousedown', 'pointerdown'].forEach((ev) => eb.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
       eb.addEventListener('click', () => {
         lastEl.focus();
         if (!document.execCommand('insertText', false, emoji)) {
