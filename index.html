@@ -687,6 +687,19 @@
   .xl-import-btns button { font-family: inherit; border: none; border-radius: 10px; padding: 9px 0; font-size: 15px; cursor: pointer; }
   .xl-import-btns .xl-cancel { flex: 1; background: #33505f; color: #fff; }
   .xl-import-btns .xl-ok { flex: 3; background: #3d8fc0; color: #fff; font-weight: 700; }
+  .xl-color-wrap { position: relative; flex: 0 0 auto; }
+  .xl-import-btns .xl-color-btn {
+    height: 100%; display: inline-flex; align-items: center; gap: 6px;
+    background: #fff; color: #33505f; border: 1px solid #c7d6de; padding: 0 12px; font-size: 13.5px;
+  }
+  .xl-color-dot { width: 16px; height: 16px; border-radius: 50%; box-shadow: 0 0 0 1px #c7d6de; }
+  .xl-color-pop {
+    display: none; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+    width: 228px; flex-wrap: wrap; gap: 6px; padding: 10px;
+    background: #fff; border: 1px solid #c7d6de; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.18); z-index: 3;
+  }
+  .xl-color-pop.show { display: flex; }
+  .xl-import-btns .xl-color-pop .swatch { padding: 0; border-radius: 50%; flex: 0 0 22px; width: 22px; height: 22px; font-size: 0; }
   .xl-import-btns .xl-ok:disabled { background: #a9c6d8; cursor: default; }
   .mark-style-picker {
     position: fixed;
@@ -7182,7 +7195,43 @@ function openImportPreview(sheets, noteText) {
   cancel.type = 'button'; cancel.className = 'xl-cancel'; cancel.textContent = '취소';
   const ok = document.createElement('button');
   ok.type = 'button'; ok.className = 'xl-ok';
-  btns.appendChild(cancel); btns.appendChild(ok);
+  // 넣을 일정의 글자색 고르기 (넣기 버튼 왼쪽). 마지막으로 고른 색을 이 기기에서 기억
+  let importColor = '';
+  try { importColor = localStorage.getItem('dadameunImportColor') || ''; } catch (e) { /* 무시 */ }
+  const colorBtn = document.createElement('button');
+  colorBtn.type = 'button';
+  colorBtn.className = 'xl-color-btn';
+  const colorDot = document.createElement('span');
+  colorDot.className = 'xl-color-dot';
+  const paintColorBtn = () => {
+    colorDot.style.background = importColor || '#33505f';
+    colorBtn.lastChild.textContent = importColor ? '글자색' : '기본색';
+  };
+  colorBtn.append(colorDot, document.createTextNode(''));
+  paintColorBtn();
+  const colorPop = document.createElement('div');
+  colorPop.className = 'xl-color-pop';
+  COLOR_PRESETS.forEach((c) => {
+    const sw = document.createElement('button');
+    sw.type = 'button';
+    sw.className = c ? 'swatch' : 'swatch swatch-default';
+    if (c) sw.style.background = c;
+    sw.title = c || '기본색';
+    sw.addEventListener('click', () => {
+      importColor = c;
+      try { localStorage.setItem('dadameunImportColor', c); } catch (e) { /* 무시 */ }
+      paintColorBtn();
+      colorPop.classList.remove('show');
+      // 미리보기 글자도 고른 색으로
+      list.querySelectorAll('.xl-import-name').forEach((n) => { n.style.color = c || ''; });
+    });
+    colorPop.appendChild(sw);
+  });
+  colorBtn.addEventListener('click', () => colorPop.classList.toggle('show'));
+  const colorWrap = document.createElement('div');
+  colorWrap.className = 'xl-color-wrap';
+  colorWrap.append(colorBtn, colorPop);
+  btns.appendChild(cancel); btns.appendChild(colorWrap); btns.appendChild(ok);
   box.appendChild(btns);
   let rowsState = [];
   // 한 달보다 더 지난 날짜는 엑셀에 잘못 적혔을 가능성이 커서 경고하고 기본으로 빼 둠
@@ -7210,6 +7259,7 @@ function openImportPreview(sheets, noteText) {
       const n = document.createElement('span');
       n.className = 'xl-import-name';
       n.textContent = st.name;
+      if (importColor) n.style.color = importColor;
       const kd = document.createElement('span');
       kd.className = 'xl-import-kind' + (st.kind === '인버터' ? ' inv' : '');
       kd.textContent = st.kind;
@@ -7234,14 +7284,15 @@ function openImportPreview(sheets, noteText) {
     let added = 0, moved = 0;
     rowsState.filter((st) => st.checked && st.status !== 'same').forEach((st) => {
       if (st.status === 'move') {
-        // 다른 내용(색·완료 등)은 그대로 두고 날짜만 옮김
+        // 완료·배경색 등은 그대로 두고 날짜만 옮김 (글자색은 고른 색이 있으면 그 색으로)
         const [it] = memos[st.found.key].splice(st.found.idx, 1);
         if (!memos[st.found.key].length) delete memos[st.found.key];
         it.alarmFired = false;
+        if (importColor) it.color = importColor;
         (memos[st.date] = memos[st.date] || []).push(it);
         moved++;
       } else {
-        (memos[st.date] = memos[st.date] || []).push({ text: '', title: '🚚 ' + st.name + ' ' + st.kind + ' 입고', groupId: null, start: null, end: null, color: null, bgColor: null, isTodo: false, done: false, alarmTime: null, alarmFired: false, isDday: false, ddayTarget: null, image: null, order: nextOrder(), createdAt: Date.now(), importKey: st.importKey });
+        (memos[st.date] = memos[st.date] || []).push({ text: '', title: '🚚 ' + st.name + ' ' + st.kind + ' 입고', groupId: null, start: null, end: null, color: importColor || null, bgColor: null, isTodo: false, done: false, alarmTime: null, alarmFired: false, isDday: false, ddayTarget: null, image: null, order: nextOrder(), createdAt: Date.now(), importKey: st.importKey });
         added++;
       }
     });
